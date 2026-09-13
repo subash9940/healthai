@@ -2,20 +2,20 @@
  * localRulesEngine.ts
  *
  * In-browser & Next.js API deterministic rule engine.
- * 100% parity with backend rules_engine.py (v7).
+ * 100% 1:1 Parity with backend rules_engine.py (v12, 49 clinical rules).
  * Ensures zero failure rate during live hackathon demos when FastAPI backend is restarting.
  */
 
 import { TriageRequest, TriageResponse, Urgency } from "./triageContract";
 
-const GENERAL_DANGER_SIGNS = [
+export const GENERAL_DANGER_SIGNS = [
   "not_able_to_drink_or_feed",
   "vomits_everything",
   "convulsions",
   "lethargic_or_unconscious",
 ];
 
-const ADULT_RED_FAST_TRACK_SYMPTOMS = [
+export const ADULT_RED_FAST_TRACK_SYMPTOMS = [
   "chest_pain",
   "severe_chest_pain_radiating_to_arm_or_jaw",
   "altered_sensorium",
@@ -37,7 +37,7 @@ const ADULT_RED_FAST_TRACK_SYMPTOMS = [
   "eclampsia_seizures",
 ];
 
-const ADULT_RED_TRAUMA_SYMPTOMS = [
+export const ADULT_RED_TRAUMA_SYMPTOMS = [
   "stab_or_penetrating_injury",
   "limb_injury_with_absent_distal_pulse",
   "fracture_with_exposed_bone",
@@ -51,7 +51,7 @@ const ADULT_RED_TRAUMA_SYMPTOMS = [
   "uncontrolled_bleeding_or_deep_wound",
 ];
 
-const ADULT_YELLOW_MEDICAL_SYMPTOMS = [
+export const ADULT_YELLOW_MEDICAL_SYMPTOMS = [
   "post_seizure_stage",
   "abdominal_pain_or_loose_motions_gt_3_episodes",
   "fever_with_headache_or_chest_pain_or_jaundice",
@@ -69,14 +69,14 @@ const ADULT_YELLOW_MEDICAL_SYMPTOMS = [
   "not_able_to_drink_or_feed",
 ];
 
-const ADULT_YELLOW_TRAUMA_SYMPTOMS = [
+export const ADULT_YELLOW_TRAUMA_SYMPTOMS = [
   "fracture_of_hand_or_feet",
   "isolated_long_bone_fracture",
   "minor_head_injury",
   "suspected_spine_injury",
 ];
 
-const ADULT_GREEN_SYMPTOMS = [
+export const ADULT_GREEN_SYMPTOMS = [
   "minor_symptoms_of_existing_illness",
   "low_risk_cough_or_cold",
   "simple_skin_rash",
@@ -167,7 +167,7 @@ function hasMajorAdultBurn(r: TriageRequest): boolean {
   if (r.symptoms.includes("burn_special_area_hands_face_perineum_or_airway") || r.symptoms.includes("severe_burns_or_chemical_burn")) {
     return true;
   }
-  if (r.patient_age_years > 60 && (r.symptoms.includes("burn_present") || r.symptoms.includes("burns"))) {
+  if (getAgeYears(r) > 60 && (r.symptoms.includes("burn_present") || r.symptoms.includes("burns"))) {
     return true;
   }
   if (r.symptoms.includes("burn_percent_bsa_gt_20")) {
@@ -184,7 +184,7 @@ function hasLowFeverUnder101f(r: TriageRequest): boolean {
   return false;
 }
 
-function buildFeverAction(r: TriageRequest): string {
+export function buildFeverAction(r: TriageRequest): string {
   const base =
     "Acute febrile illness per ICMR Treatment Guidelines (Ch.2, Management of Acute Fever). Administer paracetamol, provide plenty of fluids.";
   const days = r.symptom_duration_days;
@@ -388,12 +388,10 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
   if (s.has("high_fever")) {
     s.add("fever");
     s.add("high_fever");
-    // NOTE: do NOT add "fever_with_headache_or_chest_pain_or_jaundice" here.
   }
   if (s.has("fever_with_chills") || s.has("chills_and_rigors")) {
     s.add("fever");
     s.add("chills_and_rigors");
-    // NOTE: do NOT add "fever_with_headache_or_chest_pain_or_jaundice" here.
   }
   if (s.has("fever_more_than_2_weeks")) {
     s.add("fever");
@@ -470,12 +468,12 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
   }
 
   // =========================================================================
-  // EMERGENCY TIER
+  // 49 CLINICAL RULES (STRICT 1:1 ORDER WITH rules_engine.py)
   // =========================================================================
 
-  // 1. IMNCI General Danger Signs (child 2 months - 5 years)
+  // 1. R-EMG-001: NHM IMNCI 2023 Module, Sec 5.1 — General Danger Signs
   if (isChild2moTo5yr(request) && GENERAL_DANGER_SIGNS.some((sig) => s.has(sig))) {
-    const action = "General danger sign present (IMNCI). Refer URGENTLY to hospital.";
+    const action = "General danger sign present (IMNCI). Complete assessment and give any pre-referral treatment immediately — refer URGENTLY to hospital.";
     return {
       urgency: "emergency",
       recommended_action: action,
@@ -487,12 +485,12 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // 2. IMNCI Severe Pneumonia / Chest Indrawing or SpO2 < 90
+  // 2. R-EMG-002: NHM IMNCI 2023 Module — Severe Pneumonia / Very Severe Disease
   if (
     (s.has("breathlessness") || s.has("difficult_breathing")) &&
     (s.has("chest_indrawing") || (request.vitals?.spo2_percent != null && request.vitals.spo2_percent < 90))
   ) {
-    const action = "Chest indrawing or SpO2 < 90% with breathing difficulty — classify as Severe Pneumonia. Refer urgently.";
+    const action = "Chest indrawing or SpO2 < 90% with breathing difficulty — classify as Severe Pneumonia/Very Severe Disease per IMNCI. Refer urgently.";
     return {
       urgency: "emergency",
       recommended_action: action,
@@ -504,54 +502,52 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // 3. IMNCI Severe Dehydration (child 2mo-5yr, 2+ signs)
-  if (isChild2moTo5yr(request)) {
-    const signs = [
+  // 3. R-EMG-003: NHM IMNCI 2023 Chart Booklet — Severe Dehydration (child)
+  if (
+    isChild2moTo5yr(request) &&
+    [
       "lethargic_or_unconscious",
       "sunken_eyes",
       "not_able_to_drink_or_drinking_poorly",
       "skin_pinch_goes_back_very_slowly",
-    ];
-    const matchCount = signs.filter((sig) => s.has(sig)).length;
-    if (matchCount >= 2) {
-      const action = "SEVERE DEHYDRATION (2+ signs) per IMNCI. Refer urgently.";
-      return {
-        urgency: "emergency",
-        recommended_action: action,
-        citizen_message: buildCitizenMessage("emergency", "district_hospital", lang, action),
-        rule_trace: ["R-EMG-003"],
-        requires_referral: true,
-        referral_target_level: "district_hospital",
-        fhir_ready: true,
-      };
-    }
+    ].filter((sig) => s.has(sig)).length >= 2
+  ) {
+    const action = "SEVERE DEHYDRATION (2+ signs) per IMNCI. Refer urgently. Give ORS sips en route if able to drink — do not delay referral to attempt rehydration at home.";
+    return {
+      urgency: "emergency",
+      recommended_action: action,
+      citizen_message: buildCitizenMessage("emergency", "district_hospital", lang, action),
+      rule_trace: ["R-EMG-003"],
+      requires_referral: true,
+      referral_target_level: "district_hospital",
+      fhir_ready: true,
+    };
   }
 
-  // 4. IMNCI Severe Dehydration (young infant 0-2mo, 2+ signs)
-  if (isYoungInfant(request)) {
-    const infantSigns = [
+  // 4. R-EMG-004: NHM IMNCI 2023 Module — Severe Dehydration (young infant)
+  if (
+    isYoungInfant(request) &&
+    [
       "movement_only_when_stimulated_or_none",
       "sunken_eyes",
       "skin_pinch_goes_back_very_slowly",
-    ];
-    const matchCount = infantSigns.filter((sig) => s.has(sig)).length;
-    if (matchCount >= 2) {
-      const action = "SEVERE DEHYDRATION (young infant, 2+ signs) per IMNCI. Refer urgently.";
-      return {
-        urgency: "emergency",
-        recommended_action: action,
-        citizen_message: buildCitizenMessage("emergency", "district_hospital", lang, action),
-        rule_trace: ["R-EMG-004"],
-        requires_referral: true,
-        referral_target_level: "district_hospital",
-        fhir_ready: true,
-      };
-    }
+    ].filter((sig) => s.has(sig)).length >= 2
+  ) {
+    const action = "SEVERE DEHYDRATION (young infant, 2+ signs) per IMNCI. Refer urgently.";
+    return {
+      urgency: "emergency",
+      recommended_action: action,
+      citizen_message: buildCitizenMessage("emergency", "district_hospital", lang, action),
+      rule_trace: ["R-EMG-004"],
+      requires_referral: true,
+      referral_target_level: "district_hospital",
+      fhir_ready: true,
+    };
   }
 
-  // 5. Very Severe Febrile Disease
+  // 5. R-EMG-005: NHM IMNCI 2023 Chart Booklet — Very Severe Febrile Disease
   if (s.has("fever") && (GENERAL_DANGER_SIGNS.some((sig) => s.has(sig)) || s.has("stiff_neck"))) {
-    const action = "VERY SEVERE FEBRILE DISEASE (danger sign or stiff neck + fever) per IMNCI. Refer urgently.";
+    const action = "VERY SEVERE FEBRILE DISEASE (danger sign or stiff neck + fever) per IMNCI. Give first dose of appropriate antimalarial and antibiotic before urgent referral.";
     return {
       urgency: "emergency",
       recommended_action: action,
@@ -563,9 +559,9 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // 6. Mastoiditis
+  // 6. R-EMG-006: NHM IMNCI 2023 Chart Booklet — Mastoiditis
   if (s.has("tender_swelling_behind_ear")) {
-    const action = "MASTOIDITIS per IMNCI. Refer urgently.";
+    const action = "MASTOIDITIS per IMNCI. Give first dose of antibiotic and paracetamol for pain before urgent referral.";
     return {
       urgency: "emergency",
       recommended_action: action,
@@ -577,9 +573,9 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // 7. Pregnancy Emergency Signs
+  // 7. R-EMG-007: ASHA Module 6 (NHM/MoHFW), Part B Sec 4 — Pregnancy Danger Signs
   if (
-    request.is_pregnant &&
+    request.is_pregnant === true &&
     [
       "bleeding_from_vagina_any_amount",
       "loss_of_foetal_movement_or_severe_abdominal_pain",
@@ -588,7 +584,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
       "convulsions_or_fits",
     ].some((sig) => s.has(sig))
   ) {
-    const action = "Antenatal danger sign per ASHA Module 6 — facilitate IMMEDIATE referral to a facility equipped for obstetric complications.";
+    const action = "Antenatal danger sign per ASHA Module 6 — facilitate IMMEDIATE referral to a facility equipped for obstetric complications (surgery/blood transfusion capability).";
     return {
       urgency: "emergency",
       recommended_action: action,
@@ -600,15 +596,20 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // 8. Labour & Delivery Danger Signs
+  // 8. R-EMG-008: ASHA Module 6 (NHM/MoHFW), Part B Sec 4 — Labour & Delivery Danger Signs
   if (
+    request.is_pregnant === true &&
     [
-      "placenta_not_delivered_after_30_min",
-      "severe_bleeding_after_delivery",
-      "hand_or_foot_or_cord_prolapsing",
+      "bleeding_fresh_blood",
+      "swollen_face_or_hands",
+      "baby_lying_sideways_malpresentation",
+      "water_broke_no_labour_within_24h",
+      "liquor_colour_green_or_brown",
+      "prolonged_labour_pushing_gt_12h_or_gt_8h_multipara",
+      "retained_placenta",
     ].some((sig) => s.has(sig))
   ) {
-    const action = "Obstetric emergency in labour/delivery per ASHA Module 6. Urgent referral to FRU.";
+    const action = "Intrapartum danger sign per ASHA Module 6 — shift mother immediately to a facility able to manage obstetric emergencies.";
     return {
       urgency: "emergency",
       recommended_action: action,
@@ -620,12 +621,12 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // 9. Postpartum Severe Bleeding or Convulsions
+  // 9. R-EMG-009: ASHA Module 6 (NHM/MoHFW), Part B Sec 6 — Postpartum Excessive Bleeding
   if (
-    request.is_postpartum &&
-    ["severe_bleeding_pads_soaked_quickly", "convulsions_after_delivery"].some((sig) => s.has(sig))
+    (request.is_postpartum === true || (request as any).is_postpartum) &&
+    s.has("more_than_5_pads_per_day_or_1_thick_cloth_per_day")
   ) {
-    const action = "Postpartum haemorrhage or eclampsia danger sign per ASHA Module 6. Urgent referral to FRU.";
+    const action = "POSTPARTUM HAEMORRHAGE — most urgent per ASHA Module 6. Refer immediately; advise mother to begin breastfeeding immediately while arranging transport (helps reduce bleeding). Even a few minutes' delay can matter.";
     return {
       urgency: "emergency",
       recommended_action: action,
@@ -637,17 +638,18 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // 10. Young Infant Possible Serious Bacterial Infection
+  // 10. R-EMG-010: ASHA Module 6 (NHM/MoHFW), Part B Sec 6 — Postpartum Convulsions
   if (
-    isYoungInfant(request) &&
+    (request.is_postpartum === true || (request as any).is_postpartum) &&
     [
-      "convulsions_reported",
-      "fast_breathing_60_or_more",
-      "severe_chest_indrawing",
-      "movement_only_when_stimulated_or_none",
+      "convulsions",
+      "fits",
+      "swelling_face_or_hands",
+      "severe_headache",
+      "blurred_vision",
     ].some((sig) => s.has(sig))
   ) {
-    const action = "POSSIBLE SERIOUS BACTERIAL INFECTION (clinical sign) per IMNCI young infant module. Refer urgently.";
+    const action = "Postpartum convulsions / pre-eclampsia sign per ASHA Module 6. Immediate referral — if ANM reachable within 15 minutes, she may stabilise before referral.";
     return {
       urgency: "emergency",
       recommended_action: action,
@@ -659,13 +661,20 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // 11. Young Infant Hypothermia
+  // 11. R-EMG-011: SBA Guidelines (MoHFW/NHM), Module I Box 7 — FRU-tier danger signs
   if (
-    isYoungInfant(request) &&
-    request.vitals?.temperature_celsius != null &&
-    request.vitals.temperature_celsius < 35.5
+    request.is_pregnant === true &&
+    [
+      "malpresentation",
+      "multiple_pregnancy",
+      "bleeding_pad_soaked_lt_5_min",
+      "haemoglobin_lt_7",
+      "convulsions_or_loss_of_consciousness",
+      "decreased_or_absent_foetal_movements",
+      "severe_headache_with_blurred_vision_or_spots",
+    ].some((sig) => s.has(sig))
   ) {
-    const action = "Young infant (<2 months) with axillary temperature <35.5°C — hypothermia. Re-warm, refer urgently.";
+    const action = "Refer to FRU (First Referral Unit) — facility with blood transfusion and surgical capability, per SBA Guidelines Box 7.";
     return {
       urgency: "emergency",
       recommended_action: action,
@@ -677,7 +686,73 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // 12. Adult / Universal RED Fast Track (Annexure 4 p.51)
+  // 12. R-EMG-013: SBA Guidelines (MoHFW/NHM), Module I Box 7 — Premature Rupture of Membranes
+  if (
+    request.is_pregnant === true &&
+    s.has("premature_rupture_of_membranes_before_37_weeks")
+  ) {
+    const action = "Premature Rupture of Membranes before 37 weeks — Visit FRU per SBA Guidelines Box 7. Refer immediately.";
+    return {
+      urgency: "emergency",
+      recommended_action: action,
+      citizen_message: buildCitizenMessage("emergency", "district_hospital", lang, action),
+      rule_trace: ["R-EMG-013"],
+      requires_referral: true,
+      referral_target_level: "district_hospital",
+      fhir_ready: true,
+    };
+  }
+
+  // 13. R-EMG-014: SBA Guidelines (MoHFW/NHM), Module I Box 7 — Temperature more than 38°C
+  if (
+    request.is_pregnant === true &&
+    request.vitals?.temperature_celsius != null &&
+    request.vitals.temperature_celsius > 38.0
+  ) {
+    const action = "Temperature above 38°C during pregnancy/labour — Visit FRU per SBA Guidelines Box 7. Refer immediately.";
+    return {
+      urgency: "emergency",
+      recommended_action: action,
+      citizen_message: buildCitizenMessage("emergency", "district_hospital", lang, action),
+      rule_trace: ["R-EMG-014"],
+      requires_referral: true,
+      referral_target_level: "district_hospital",
+      fhir_ready: true,
+    };
+  }
+
+  // 14. R-EMG-015: SBA Guidelines (MoHFW/NHM), Module I Box 7 — Ruptured membranes for more than 18 hours
+  if (
+    request.is_pregnant === true &&
+    s.has("ruptured_membranes_more_than_18h")
+  ) {
+    const action = "Ruptured membranes for more than 18 hours — Visit FRU per SBA Guidelines Box 7. Refer immediately (higher infection risk than the 24h no-labour-onset threshold).";
+    return {
+      urgency: "emergency",
+      recommended_action: action,
+      citizen_message: buildCitizenMessage("emergency", "district_hospital", lang, action),
+      rule_trace: ["R-EMG-015"],
+      requires_referral: true,
+      referral_target_level: "district_hospital",
+      fhir_ready: true,
+    };
+  }
+
+  // 15. R-EMG-012: NHM IMNCI 2023 Module — Young Infant: fast breathing (>=60/min) treated as severe
+  if (isYoungInfant(request) && hasFastBreathing(request)) {
+    const action = "Young infant (<2 months) with fast breathing (RR>=60/min) — classify as Severe Pneumonia or Very Severe Disease per IMNCI. Give first dose of antibiotic, keep warm, refer urgently.";
+    return {
+      urgency: "emergency",
+      recommended_action: action,
+      citizen_message: buildCitizenMessage("emergency", "district_hospital", lang, action),
+      rule_trace: ["R-EMG-012"],
+      requires_referral: true,
+      referral_target_level: "district_hospital",
+      fhir_ready: true,
+    };
+  }
+
+  // 16. R-ADULT-EMG-001: Fast Track / RED medical (Annexure 4 p.51)
   if (isOutsideImnciChildBands(request) && ADULT_RED_FAST_TRACK_SYMPTOMS.some((sig) => s.has(sig))) {
     const action = "RED / Fast Track per Annexure 4. Do urgent resuscitation and basic management, refer to higher centre at the earliest — highest priority.";
     return {
@@ -691,9 +766,9 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // 13. Adult / Universal RED Burns
+  // 17. R-ADULT-EMG-002: Major burns (Annexure 4 p.51 + Annexure 1 p.46)
   if (isOutsideImnciChildBands(request) && hasMajorAdultBurn(request)) {
-    const action = "RED — major burn (>20% BSA, special area, or age >60y) per Annexure 4/Annexure 1. Refer to higher centre urgently.";
+    const action = "RED — major burn (>20% BSA, special area, or age >60y) per Annexure 4/Annexure 1. Do not remove anything stuck to the skin. Refer to higher centre urgently.";
     return {
       urgency: "emergency",
       recommended_action: action,
@@ -705,7 +780,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // 14. Adult / Universal RED Trauma
+  // 18. R-ADULT-EMG-003: RED trauma (Annexure 4 p.51)
   if (isOutsideImnciChildBands(request) && ADULT_RED_TRAUMA_SYMPTOMS.some((sig) => s.has(sig))) {
     const action = "RED trauma per Annexure 4. Control bleeding, immobilise as appropriate, refer to higher centre at the earliest.";
     return {
@@ -719,7 +794,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // 15. Adult / Universal RED Unstable Vitals
+  // 19. R-ADULT-EMG-004: Unstable vitals (Annexure 4 p.51)
   if (isOutsideImnciChildBands(request) && hasUnstableAdultVitals(request)) {
     const action = "RED — unstable vital signs per Annexure 4, regardless of presenting complaint. Secure IV line, start oxygen, monitor vitals, refer urgently.";
     return {
@@ -733,8 +808,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // --- v8: Malaria (NVBDCP 2009/2013) EMERGENCY ---
-  // Hyperpyrexia (temp >= 40.0 C / 104 F)
+  // 20. R-MAL-EMG-001: Malaria Hyperpyrexia (NVBDCP 2009/2013)
   if (
     s.has("high_fever_gt_104f_or_40c") ||
     ((s.has("fever") || s.has("high_fever")) &&
@@ -753,7 +827,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // Haemoglobinuria / Blackwater fever
+  // 21. R-MAL-EMG-002: Haemoglobinuria / Blackwater fever (NVBDCP 2009/2013)
   if (s.has("dark_or_cola_coloured_urine")) {
     const action = "Dark/cola-coloured urine (haemoglobinuria / blackwater fever) — severe malaria manifestation per NVBDCP. High risk of acute renal failure. Refer immediately to District Hospital.";
     return {
@@ -767,8 +841,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // --- v11: Anemia Mukt Bharat EMERGENCY ---
-  // Severe Anemia in Pregnancy (Hb < 5.0 g/dL)
+  // 22. R-ANE-EMG-001: Severe Anemia in Pregnancy Hb < 5.0 (Anemia Mukt Bharat)
   if (
     request.is_pregnant === true &&
     request.vitals?.hemoglobin_g_dl != null &&
@@ -790,8 +863,12 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
   // HIGH TIER
   // =========================================================================
 
-  // Young Infant fever >= 37.5
-  if (isYoungInfant(request) && request.vitals?.temperature_celsius != null && request.vitals.temperature_celsius >= 37.5) {
+  // 23. R-HIGH-001: Possible Serious Bacterial Infection (young infant temp >= 37.5)
+  if (
+    isYoungInfant(request) &&
+    request.vitals?.temperature_celsius != null &&
+    request.vitals.temperature_celsius >= 37.5
+  ) {
     const action = "Young infant (<2 months) with axillary temperature ≥37.5°C — possible serious bacterial infection per IMNCI. Refer urgently to hospital.";
     return {
       urgency: "high",
@@ -804,9 +881,9 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // SBA Guidelines Box 7 — 24-hour-PHC-tier danger signs
+  // 24. R-HIGH-002: SBA Guidelines Box 7 — 24-hour-PHC-tier danger signs
   if (
-    request.is_pregnant &&
+    request.is_pregnant === true &&
     (hasHighBP(request) ||
       [
         "high_fever_with_or_without_abdominal_pain_too_weak_to_get_out_of_bed",
@@ -829,9 +906,12 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // Puerperal Sepsis
-  if (request.is_postpartum && s.has("foul_smelling_discharge")) {
-    const action = "Suspected puerperal sepsis per ASHA Module 6. Refer same day — mother needs antibiotics.";
+  // 25. R-HIGH-003: Puerperal Sepsis (ASHA Module 6)
+  if (
+    (request.is_postpartum === true || (request as any).is_postpartum) &&
+    s.has("foul_smelling_discharge")
+  ) {
+    const action = "Suspected puerperal sepsis per ASHA Module 6. Measure temperature to confirm fever. Refer same day — mother needs antibiotics.";
     return {
       urgency: "high",
       recommended_action: action,
@@ -843,7 +923,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // Child Pneumonia (fast breathing, no danger sign, no chest indrawing)
+  // 26. R-HIGH-004: Pneumonia (fast breathing, no danger sign) per IMNCI
   if (
     isChild2moTo5yr(request) &&
     hasFastBreathing(request) &&
@@ -851,7 +931,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     !GENERAL_DANGER_SIGNS.some((sig) => s.has(sig)) &&
     !(request.vitals?.spo2_percent != null && request.vitals.spo2_percent < 90)
   ) {
-    const action = "PNEUMONIA (fast breathing, no danger sign, no chest indrawing) per IMNCI. Give oral amoxicillin, soothe throat, advise when to return immediately.";
+    const action = "PNEUMONIA (fast breathing, no danger sign) per IMNCI. Give first dose of oral antibiotic, advise home care and soothe throat/cough remedy, follow up in 2 days or sooner if worsening.";
     return {
       urgency: "high",
       recommended_action: action,
@@ -863,63 +943,26 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // Severe Malnutrition
-  if (isChild2moTo5yr(request) && (s.has("severe_wasting") || s.has("oedema_both_feet"))) {
-    const action = "SEVERE ACUTE MALNUTRITION (severe wasting or bilateral pedal oedema) per IMNCI. Refer to Nutrition Rehabilitation Centre (NRC) / CHC.";
-    return {
-      urgency: "high",
-      recommended_action: action,
-      citizen_message: buildCitizenMessage("high", "chc", lang, action),
-      rule_trace: ["R-HIGH-005"],
-      requires_referral: true,
-      referral_target_level: "chc",
-      fhir_ready: true,
-    };
-  }
-
-  // Severe Persistent Diarrhoea
+  // 27. R-HIGH-005: Continuous severe abdominal pain during pregnancy (SBA Guidelines Box 7)
   if (
-    isChild2moTo5yr(request) &&
-    s.has("diarrhoea_14_days_or_more") &&
-    [
-      "lethargic_or_unconscious",
-      "sunken_eyes",
-      "not_able_to_drink_or_drinking_poorly",
-      "restless_and_irritable",
-      "drinks_eagerly_thirsty",
-      "skin_pinch_goes_back_slowly",
-      "skin_pinch_goes_back_very_slowly",
-    ].some((sig) => s.has(sig))
+    request.is_pregnant === true &&
+    s.has("continuous_severe_abdominal_pain")
   ) {
-    const action = "SEVERE PERSISTENT DIARRHOEA per IMNCI. Treat dehydration before referral, then refer to hospital.";
-    return {
-      urgency: "high",
-      recommended_action: action,
-      citizen_message: buildCitizenMessage("high", "chc", lang, action),
-      rule_trace: ["R-HIGH-006"],
-      requires_referral: true,
-      referral_target_level: "chc",
-      fhir_ready: true,
-    };
-  }
-
-  // Dysentery (blood in stool)
-  if (isChild2moTo5yr(request) && s.has("blood_in_stool")) {
-    const action = "DYSENTERY (blood in stool) per IMNCI. Give ciprofloxacin for 3 days, follow up in 2 days.";
+    const action = "Continuous severe abdominal pain during pregnancy — Visit 24-hour PHC per SBA Guidelines Box 7.";
     return {
       urgency: "high",
       recommended_action: action,
       citizen_message: buildCitizenMessage("high", "phc", lang, action),
-      rule_trace: ["R-HIGH-007"],
+      rule_trace: ["R-HIGH-005"],
       requires_referral: true,
       referral_target_level: "phc",
       fhir_ready: true,
     };
   }
 
-  // Adult YELLOW Medical (Annexure 4 p.52)
+  // 28. R-ADULT-HIGH-001: YELLOW medical (Annexure 4 p.52)
   if (isOutsideImnciChildBands(request) && ADULT_YELLOW_MEDICAL_SYMPTOMS.some((sig) => s.has(sig))) {
-    const action = "YELLOW medical per Annexure 4 — manage at HW/MO level, refer if condition persists or worsens.";
+    const action = "YELLOW per Annexure 4 — do not let the patient deteriorate, resuscitate appropriately, plan timely referral if required.";
     return {
       urgency: "high",
       recommended_action: action,
@@ -931,21 +974,24 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // Adult YELLOW Trauma (Annexure 4 p.52)
-  if (isOutsideImnciChildBands(request) && ADULT_YELLOW_TRAUMA_SYMPTOMS.some((sig) => s.has(sig))) {
-    const action = "YELLOW trauma per Annexure 4. First aid, analgesia, splinting, refer to CHC/hospital for definitive care.";
+  // 29. R-ADULT-HIGH-002: YELLOW trauma (Annexure 4 p.52)
+  if (
+    isOutsideImnciChildBands(request) &&
+    (ADULT_YELLOW_TRAUMA_SYMPTOMS.some((sig) => s.has(sig)) || (request.is_pregnant === true && s.has("injury")))
+  ) {
+    const action = "YELLOW trauma per Annexure 4 — stabilise, monitor, refer to higher centre if required.";
     return {
       urgency: "high",
       recommended_action: action,
-      citizen_message: buildCitizenMessage("high", "chc", lang, action),
+      citizen_message: buildCitizenMessage("high", "phc", lang, action),
       rule_trace: ["R-ADULT-HIGH-002"],
       requires_referral: true,
-      referral_target_level: "chc",
+      referral_target_level: "phc",
       fhir_ready: true,
     };
   }
 
-  // --- v9: Dengue (NCVBDC 2023) HIGH ---
+  // 30. R-DEN-HIGH-001: Dengue Warning Signs (NCVBDC 2023)
   if (
     (s.has("fever") || s.has("high_fever")) &&
     [
@@ -967,7 +1013,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // --- v11: Anemia Mukt Bharat HIGH (Severe Anemia by population band) ---
+  // 31. R-ANE-HIGH-001: Severe Anemia in Pregnancy Hb 5.0-6.9 (Anemia Mukt Bharat)
   if (
     request.is_pregnant === true &&
     request.vitals?.hemoglobin_g_dl != null &&
@@ -986,6 +1032,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
+  // 32. R-ANE-HIGH-002: Severe Anemia in Children 6-59m Hb < 7.0 (Anemia Mukt Bharat)
   if (
     isChild2moTo5yr(request) &&
     request.vitals?.hemoglobin_g_dl != null &&
@@ -1003,6 +1050,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
+  // 33. R-ANE-HIGH-003: Severe Anemia in Children 5-9y Hb < 8.0 (Anemia Mukt Bharat)
   if (
     isChild5to9yr(request) &&
     request.vitals?.hemoglobin_g_dl != null &&
@@ -1020,6 +1068,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
+  // 34. R-ANE-HIGH-004: Severe Anemia in Adolescents 10-19y Hb < 8.0 (Anemia Mukt Bharat)
   if (
     isAdolescent10to19yr(request) &&
     request.vitals?.hemoglobin_g_dl != null &&
@@ -1037,6 +1086,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
+  // 35. R-ANE-HIGH-005: Severe Anemia in Non-Pregnant Women >=15y Hb < 8.0 (Anemia Mukt Bharat)
   if (
     (request.patient_sex === "female" || (request as any).sex === "female") &&
     getAgeYears(request) >= 15.0 &&
@@ -1060,12 +1110,66 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
   // MEDIUM TIER
   // =========================================================================
 
-  // Diarrhea & Gastroenteritis
+  // 36. R-MAL-MED-001: Fever with chills/rigors (NVBDCP 2009/2013)
+  if (
+    (s.has("fever") || s.has("high_fever")) &&
+    (s.has("chills_and_rigors") || s.has("fever_with_chills"))
+  ) {
+    const action = "Fever with chills and rigors — suspected uncomplicated malaria per NVBDCP. Perform RDT / prepare blood smear, manage with antipyretic, refer to PHC/Health Sub-Centre for diagnosis and species-specific treatment.";
+    return {
+      urgency: "medium",
+      recommended_action: action,
+      citizen_message: buildCitizenMessage("medium", "phc", lang, action),
+      rule_trace: ["R-MAL-MED-001"],
+      requires_referral: true,
+      referral_target_level: "phc",
+      fhir_ready: true,
+    };
+  }
+
+  // 37. R-TB-MED-001: Presumptive Pulmonary TB (NTEP/MoHFW)
+  if (
+    [
+      "cough_more_than_2_weeks",
+      "fever_more_than_2_weeks",
+      "significant_weight_loss",
+      "contact_with_known_tb_patient",
+    ].some((sig) => s.has(sig))
+  ) {
+    const action = "Presumptive Pulmonary TB per NTEP guidelines (cough/fever > 2 weeks, weight loss, or TB contact). Refer to nearest PHC/DMC (Designated Microscopy Centre) or NAAT facility for sputum examination and chest X-ray.";
+    return {
+      urgency: "medium",
+      recommended_action: action,
+      citizen_message: buildCitizenMessage("medium", "phc", lang, action),
+      rule_trace: ["R-TB-MED-001"],
+      requires_referral: true,
+      referral_target_level: "phc",
+      fhir_ready: true,
+    };
+  }
+
+  // 38. R-ANE-MED-001: Visible Pallor (Anemia Mukt Bharat)
+  if (
+    (s.has("pallor_or_pale_skin_or_conjunctiva") || s.has("pallor")) &&
+    !(request.vitals?.hemoglobin_g_dl != null)
+  ) {
+    const action = "Visible clinical pallor (pale skin, conjunctiva, or nail beds) without laboratory Hb measurement. Refer to PHC for Point-of-Care hemoglobin test (digital hemoglobinometer) and IFA supplementation.";
+    return {
+      urgency: "medium",
+      recommended_action: action,
+      citizen_message: buildCitizenMessage("medium", "phc", lang, action),
+      rule_trace: ["R-ANE-MED-001"],
+      requires_referral: true,
+      referral_target_level: "phc",
+      fhir_ready: true,
+    };
+  }
+
+  // 39. R-MED-001: Diarrhoea & Gastroenteritis (IMNCI / MoHFW)
   if (
     s.has("diarrhea") ||
     s.has("loose_motions") ||
-    s.has("vomiting_diarrhea") ||
-    (s.has("diarrhea") && s.has("vomiting"))
+    s.has("vomiting_diarrhea")
   ) {
     const action = "Acute diarrhoea / Gastroenteritis per IMNCI / MoHFW guidelines. Start ORS and extra fluids, administer Zinc (for children), monitor for danger signs, refer to PHC if not resolving.";
     return {
@@ -1079,7 +1183,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // Dysuria / Urinary Tract Infection
+  // 40. R-MED-UTI-001: Dysuria / UTI (MoHFW STG)
   if (s.has("burning_micturition") || s.has("painful_urination") || s.has("dysuria")) {
     const action = "Dysuria / Suspected Urinary Tract Infection per clinical protocols. Encourage fluid intake, refer to PHC for urine examination and antibiotic treatment.";
     return {
@@ -1093,7 +1197,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // Acute Abdominal Presentation
+  // 41. R-MED-GI-001: Acute Abdominal Presentation (MoHFW)
   if (
     s.has("persistent_or_severe_abdominal_pain_or_tenderness") ||
     s.has("abdominal_distension_or_swelling") ||
@@ -1111,8 +1215,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // Acute Febrile Illness (Fever without danger signs and without known malaria test result)
-  // v12 FIX: Guard against <38.3C when vitals are provided (falls through to GREEN / R-ADULT-LOW-001)
+  // 42. R-MED-FEVER-001: Acute Febrile Illness (ICMR 2019)
   if (
     (s.has("fever") || s.has("high_fever")) &&
     !s.has("malaria_test_positive") &&
@@ -1134,8 +1237,13 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // Malaria uncomplicated
-  if (s.has("fever") && s.has("malaria_test_positive") && !GENERAL_DANGER_SIGNS.some((sig) => s.has(sig)) && !s.has("stiff_neck")) {
+  // 43. R-MED-002: Malaria (uncomplicated) per IMNCI
+  if (
+    s.has("fever") &&
+    s.has("malaria_test_positive") &&
+    !GENERAL_DANGER_SIGNS.some((sig) => s.has(sig)) &&
+    !s.has("stiff_neck")
+  ) {
     const action = "MALARIA (uncomplicated) per IMNCI. Give oral antimalarial. Refer if not improving or new danger signs develop.";
     return {
       urgency: "medium",
@@ -1148,8 +1256,11 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // Acute Ear Infection
-  if ((s.has("pus_draining_less_than_14_days") || s.has("ear_pain")) && !s.has("pus_draining_14_days_or_more")) {
+  // 44. R-MED-003: Acute Ear Infection per IMNCI
+  if (
+    (s.has("pus_draining_less_than_14_days") || s.has("ear_pain")) &&
+    !s.has("pus_draining_14_days_or_more")
+  ) {
     const action = "ACUTE EAR INFECTION per IMNCI. Give antibiotic course, paracetamol for pain, dry the ear by wicking. Follow up in 5 days.";
     return {
       urgency: "medium",
@@ -1162,9 +1273,9 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // Chronic Ear Infection
+  // 45. R-MED-004: Chronic Ear Infection per IMNCI
   if (s.has("pus_draining_14_days_or_more")) {
-    const action = "CHRONIC EAR INFECTION per IMNCI. Dry the ear by wicking. Refer to facility for further evaluation.";
+    const action = "CHRONIC EAR INFECTION per IMNCI. Dry the ear by wicking. Refer to facility for further evaluation — do not give oral antibiotics per chronic-infection protocol.";
     return {
       urgency: "medium",
       recommended_action: action,
@@ -1176,66 +1287,11 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // --- v8: Malaria (NVBDCP 2009/2013) MEDIUM ---
-  if (
-    (s.has("fever") || s.has("high_fever")) &&
-    (s.has("chills_and_rigors") || s.has("fever_with_chills"))
-  ) {
-    const action = "Fever with chills and rigors — suspected uncomplicated malaria per NVBDCP. Perform RDT / prepare blood smear, manage with antipyretic, refer to PHC/Health Sub-Centre for diagnosis and species-specific treatment.";
-    return {
-      urgency: "medium",
-      recommended_action: action,
-      citizen_message: buildCitizenMessage("medium", "phc", lang, action),
-      rule_trace: ["R-MAL-MED-001"],
-      requires_referral: true,
-      referral_target_level: "phc",
-      fhir_ready: true,
-    };
-  }
-
-  // --- v10: TB (NTEP/MoHFW) MEDIUM ---
-  if (
-    [
-      "cough_more_than_2_weeks",
-      "fever_more_than_2_weeks",
-      "significant_weight_loss",
-      "contact_with_known_tb_patient",
-    ].some((sig) => s.has(sig))
-  ) {
-    const action = "Presumptive Pulmonary TB per NTEP guidelines (cough/fever > 2 weeks, weight loss, or TB contact). Refer to nearest PHC/DMC (Designated Microscopy Centre) or NAAT facility for sputum examination and chest X-ray.";
-    return {
-      urgency: "medium",
-      recommended_action: action,
-      citizen_message: buildCitizenMessage("medium", "phc", lang, action),
-      rule_trace: ["R-TB-MED-001"],
-      requires_referral: true,
-      referral_target_level: "phc",
-      fhir_ready: true,
-    };
-  }
-
-  // --- v11: Anemia Mukt Bharat MEDIUM (Visible Pallor fallback without Hb value) ---
-  if (
-    (s.has("pallor_or_pale_skin_or_conjunctiva") || s.has("pallor")) &&
-    !(request.vitals?.hemoglobin_g_dl != null)
-  ) {
-    const action = "Clinical pallor observed without digital haemoglobin test per Anemia Mukt Bharat. Screen with digital haemoglobinometer, provide age-appropriate IFA supplementation, refer to PHC if severe.";
-    return {
-      urgency: "medium",
-      recommended_action: action,
-      citizen_message: buildCitizenMessage("medium", "phc", lang, action),
-      rule_trace: ["R-ANE-MED-001"],
-      requires_referral: true,
-      referral_target_level: "phc",
-      fhir_ready: true,
-    };
-  }
-
   // =========================================================================
   // LOW TIER
   // =========================================================================
 
-  // Child No Pneumonia Cough or Cold
+  // 46. R-LOW-001: No Pneumonia: Cough or Cold (IMNCI)
   if (
     s.has("cough") &&
     !s.has("chest_indrawing") &&
@@ -1243,7 +1299,7 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     !hasFastBreathing(request) &&
     !s.has("fever")
   ) {
-    const action = "No general danger sign, no fast breathing or chest indrawing present. Mild symptoms — home care advice (soothe throat, keep warm, clear blocked nose).";
+    const action = "No general danger sign, no fast breathing or chest indrawing present. Mild symptoms — home care advice (soothe throat, keep warm, clear blocked nose), follow up if persists beyond 3 days or breathing worsens.";
     return {
       urgency: "low",
       recommended_action: action,
@@ -1255,9 +1311,14 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // Fever, malaria negative
-  if (s.has("fever") && s.has("malaria_test_negative") && !GENERAL_DANGER_SIGNS.some((sig) => s.has(sig)) && !s.has("stiff_neck")) {
-    const action = "Fever, malaria unlikely per IMNCI. Treat visible cause of fever if any.";
+  // 47. R-LOW-002: Fever, Malaria Unlikely (IMNCI)
+  if (
+    s.has("fever") &&
+    s.has("malaria_test_negative") &&
+    !GENERAL_DANGER_SIGNS.some((sig) => s.has(sig)) &&
+    !s.has("stiff_neck")
+  ) {
+    const action = "Fever, malaria unlikely per IMNCI. Treat visible cause of fever if any. Advise return if fever persists beyond 7 days or danger signs develop.";
     return {
       urgency: "low",
       recommended_action: action,
@@ -1269,7 +1330,27 @@ export function evaluateTriage(request: TriageRequest): TriageResponse {
     };
   }
 
-  // Adult Universal GREEN Tier
+  // 48. R-LOW-003: No Ear Infection (IMNCI)
+  if (
+    s.has("ear_problem_reported") &&
+    !s.has("ear_pain") &&
+    !s.has("tender_swelling_behind_ear") &&
+    !s.has("pus_draining_less_than_14_days") &&
+    !s.has("pus_draining_14_days_or_more")
+  ) {
+    const action = "No ear infection per IMNCI. No treatment needed for ear.";
+    return {
+      urgency: "low",
+      recommended_action: action,
+      citizen_message: buildCitizenMessage("low", null, lang, action),
+      rule_trace: ["R-LOW-003"],
+      requires_referral: false,
+      referral_target_level: null,
+      fhir_ready: true,
+    };
+  }
+
+  // 49. R-ADULT-LOW-001: Adult Universal GREEN Tier (Annexure 4 p.53)
   if (
     isOutsideImnciChildBands(request) &&
     !hasUnstableAdultVitals(request) &&

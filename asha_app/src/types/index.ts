@@ -22,6 +22,7 @@ export interface Vitals {
   diastolic_bp?: number | null;
   respiratory_rate?: number | null;
   spo2_percent?: number | null;
+  hemoglobin_g_dl?: number | null;
 }
 
 export interface PatientDemographics {
