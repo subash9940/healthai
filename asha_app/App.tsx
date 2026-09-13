@@ -26,6 +26,7 @@ import { VitalsScreen } from "./src/screens/VitalsScreen";
 import { TriageResultScreen } from "./src/screens/TriageResultScreen";
 import { ReferralQueueScreen } from "./src/screens/ReferralQueueScreen";
 import { PatientHistoryScreen } from "./src/screens/PatientHistoryScreen";
+import { FacilityAvailabilityScreen } from "./src/screens/FacilityAvailabilityScreen";
 import { StorageService } from "./src/services/storageService";
 import { SyncService } from "./src/services/syncService";
 import { evaluateOfflineTriage } from "./src/rules/offlineRulesEngine";
@@ -38,7 +39,8 @@ type AppScreen =
   | "vitals"
   | "result"
   | "referrals"
-  | "history";
+  | "history"
+  | "facilities";
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>("auth");
@@ -176,6 +178,7 @@ export default function App() {
             onStartScreening={() => setCurrentScreen("demographics")}
             onViewReferrals={() => setCurrentScreen("referrals")}
             onViewHistory={() => setCurrentScreen("history")}
+            onViewFacilities={() => setCurrentScreen("facilities")}
           />
         )}
 
@@ -228,6 +231,13 @@ export default function App() {
 
         {currentScreen === "history" && (
           <PatientHistoryScreen
+            language={language}
+            onBack={() => setCurrentScreen("dashboard")}
+          />
+        )}
+
+        {currentScreen === "facilities" && (
+          <FacilityAvailabilityScreen
             language={language}
             onBack={() => setCurrentScreen("dashboard")}
           />

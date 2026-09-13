@@ -23,6 +23,17 @@ class FacilityPublicItem(BaseModel):
     district: Optional[str] = None
 
 
+class FacilityAvailabilityItem(BaseModel):
+    id: str
+    name: str
+    level: str
+    operational_status: str  # 'AVAILABLE' | 'BUSY' | 'EMERGENCY_ONLY' | 'FULL'
+    available_beds: int
+    status_note: Optional[str] = None
+    updated_at: Optional[str] = None
+    district: Optional[str] = "Pune"
+
+
 class FacilityStaffInfo(BaseModel):
     id: str
     name: str

@@ -18,6 +18,7 @@ from app.schemas.facility import (
     TransitionReferralRequest,
     FacilityStatusResponse,
     UpdateFacilityStatusRequest,
+    FacilityAvailabilityItem,
 )
 from app.services.auth import (
     get_current_facility_staff,
@@ -50,6 +51,37 @@ async def list_public_facilities(
             id=str(row["id"]),
             name=str(row["name"]),
             level=str(row["level"]),
+            district="Pune",
+        )
+        for row in rows
+    ]
+
+
+@router.get("/availability", response_model=List[FacilityAvailabilityItem])
+async def get_public_facility_availability(
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Public live availability feed for all healthcare facilities (beds, operational status, broadcast notes).
+    Zero auth required — consumed by ASHA Field Workers and Citizen Web.
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, name, level, operational_status, available_beds, status_note, updated_at
+            FROM facilities
+            ORDER BY name ASC
+            """
+        )
+    return [
+        FacilityAvailabilityItem(
+            id=str(row["id"]),
+            name=str(row["name"]),
+            level=str(row["level"]),
+            operational_status=str(row["operational_status"] or "AVAILABLE"),
+            available_beds=int(row["available_beds"] if row["available_beds"] is not None else 10),
+            status_note=row["status_note"],
+            updated_at=row["updated_at"].isoformat() if row["updated_at"] else None,
             district="Pune",
         )
         for row in rows

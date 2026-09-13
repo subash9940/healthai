@@ -14,6 +14,7 @@ import {
   Language,
   ReferralStatus,
   SecurityAuditLog,
+  FacilityAvailabilityItem,
 } from "../types";
 
 const KEYS = {
@@ -23,6 +24,8 @@ const KEYS = {
   SESSION_AUTH: "swasthya_asha_auth_session",
   SESSION_TOKEN: "@swasthya_session_token",
   AUDIT_LOGS: "@swasthya_security_audit_logs",
+  CACHED_FACILITIES: "@swasthya_cached_facilities",
+  CACHED_FACILITIES_TS: "@swasthya_cached_facilities_ts",
 };
 
 export const StorageService = {
@@ -248,6 +251,33 @@ export const StorageService = {
       ]);
     } catch (e) {
       console.error("Failed to mark records as synced:", e);
+    }
+  },
+
+  // --- Facility Availability Caching ---
+  async getCachedFacilityAvailability(): Promise<{ facilities: FacilityAvailabilityItem[]; cachedAt: string | null }> {
+    try {
+      const [rawList, rawTs] = await Promise.all([
+        AsyncStorage.getItem(KEYS.CACHED_FACILITIES),
+        AsyncStorage.getItem(KEYS.CACHED_FACILITIES_TS),
+      ]);
+      const facilities = rawList ? JSON.parse(rawList) : [];
+      return { facilities, cachedAt: rawTs };
+    } catch (e) {
+      console.error("Failed to read cached facilities:", e);
+      return { facilities: [], cachedAt: null };
+    }
+  },
+
+  async setCachedFacilityAvailability(facilities: FacilityAvailabilityItem[]): Promise<void> {
+    try {
+      const now = new Date().toISOString();
+      await Promise.all([
+        AsyncStorage.setItem(KEYS.CACHED_FACILITIES, JSON.stringify(facilities)),
+        AsyncStorage.setItem(KEYS.CACHED_FACILITIES_TS, now),
+      ]);
+    } catch (e) {
+      console.error("Failed to cache facilities:", e);
     }
   },
 };

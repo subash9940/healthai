@@ -39,6 +39,7 @@ interface DashboardScreenProps {
   onStartScreening: () => void;
   onViewReferrals: () => void;
   onViewHistory: () => void;
+  onViewFacilities: () => void;
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({
@@ -47,6 +48,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   onStartScreening,
   onViewReferrals,
   onViewHistory,
+  onViewFacilities,
 }) => {
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
 
@@ -356,6 +358,34 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             </Text>
           </View>
           <Text style={styles.screeningArrow}>→</Text>
+        </View>
+      </TouchableOpacity>
+
+      {/* 3b. Live Hospital & PHC Bed Availability Launcher */}
+      <TouchableOpacity
+        style={styles.facilityLauncherBtn}
+        onPress={onViewFacilities}
+        activeOpacity={0.85}
+      >
+        <View style={styles.facilityLauncherContent}>
+          <View style={styles.facilityIconCircle}>
+            <Text style={styles.facilityIconText}>🏥</Text>
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <View style={styles.facilityLauncherTitleRow}>
+              <Text style={styles.facilityLauncherTitle}>
+                {t.facilities_nav_title || "Hospital Beds & Status"}
+              </Text>
+              <View style={styles.livePill}>
+                <View style={styles.liveDot} />
+                <Text style={styles.livePillText}>LIVE</Text>
+              </View>
+            </View>
+            <Text style={styles.facilityLauncherSubtitle}>
+              {t.facilities_nav_desc || "Check real-time PHC, CHC & SDH bed capacity before referral"}
+            </Text>
+          </View>
+          <Text style={styles.facilityLauncherArrow}>→</Text>
         </View>
       </TouchableOpacity>
 
@@ -829,6 +859,80 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#FFFFFF",
     marginLeft: 8,
+  },
+
+  // 3b. Facility Launcher
+  facilityLauncherBtn: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: THEME.borderRadius.lg,
+    padding: 14,
+    marginBottom: THEME.spacing.md,
+    borderWidth: 1.5,
+    borderColor: "#0284C7",
+    shadowColor: "#0284C7",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  facilityLauncherContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  facilityIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#E0F2FE",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  facilityIconText: {
+    fontSize: 22,
+  },
+  facilityLauncherTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  facilityLauncherTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  livePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#16A34A",
+    marginRight: 4,
+  },
+  livePillText: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#166534",
+    letterSpacing: 0.5,
+  },
+  facilityLauncherSubtitle: {
+    fontSize: 11,
+    color: "#475569",
+    marginTop: 2,
+  },
+  facilityLauncherArrow: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0284C7",
+    marginLeft: 6,
   },
 
   // 4. Stats Grid

@@ -9,7 +9,20 @@ export type Language = "mr" | "hi" | "en" | "ta";
 
 export type Urgency = "low" | "medium" | "high" | "emergency";
 export type Sex = "male" | "female" | "other";
-export type FacilityLevel = "sub_centre" | "phc" | "chc" | "district_hospital";
+export type FacilityLevel = "sub_centre" | "phc" | "chc" | "district_hospital" | "sdh" | "dh";
+
+export type FacilityOperationalStatus = "AVAILABLE" | "BUSY" | "EMERGENCY_ONLY" | "FULL";
+
+export interface FacilityAvailabilityItem {
+  id: string;
+  name: string;
+  level: string;
+  operational_status: FacilityOperationalStatus;
+  available_beds: number;
+  status_note?: string | null;
+  updated_at?: string | null;
+  district?: string | null;
+}
 
 export type ReferralStatus = "created" | "in_transit" | "received_at_facility" | "closed";
 
