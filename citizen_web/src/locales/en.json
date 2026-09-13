@@ -1,0 +1,289 @@
+{
+  "appName": "Swasthya Setu",
+  "appSubtitle": "Check symptoms and find out where to get care in rural Maharashtra",
+  "govtDept": "Public Health Department, Government of Maharashtra",
+  "guidelinesTag": "Based on verified clinical guidelines from NHM and MoHFW",
+  "emergencyCall": "108 Free Ambulance",
+  "helplineCall": "104 Health Advice",
+  "facilityQueue": "Doctor & Clinic Queue",
+  "backToCitizen": "Back to symptom check",
+
+  "emergencyBar": {
+    "prompt": "If someone is in immediate danger or severely hurt, call an ambulance now:",
+    "call108": "Call 108 (Ambulance)",
+    "call104": "Call 104 (Health advice)"
+  },
+
+  "evidence": {
+    "title": "How this works",
+    "lead": "If someone is sick or hurt, answer a few questions about their age, symptoms, and vital signs. The system checks their answers against official government health rules and tells you what to do next — whether to rest at home, visit your local clinic, or get to a hospital right away. It does not use AI to guess diagnoses.",
+    "fact1Number": "29 Rules",
+    "fact1Text": "Written directly from verified NHM, IMNCI, and ASHA clinical manuals.",
+    "fact2Number": "100% Auditable",
+    "fact2Text": "Every decision traces to an official page in the government guideline.",
+    "fact3Number": "Honest Fallback",
+    "fact3Text": "If symptoms don't match a rule, it tells you to see a health worker in person.",
+    "fact4Number": "4 Facility Levels",
+    "fact4Text": "Guides you to the right place: Sub-centre, PHC, CHC, or District Hospital."
+  },
+
+  "heroCta": {
+    "title": "Clinical Symptom Assessment",
+    "lead": "Answer questions regarding age, symptoms, and optional vitals. Triage follows verified NHM and MoHFW clinical protocols to recommend the appropriate facility level.",
+    "button": "Start Assessment"
+  },
+
+  "wizard": {
+    "step1": "Patient Details",
+    "step2": "Symptoms",
+    "step3": "Vitals (Optional)",
+    "step4": "Clinical Guidance",
+    "step1Full": "1. Patient Details",
+    "step2Full": "2. Symptoms",
+    "step3Full": "3. Vitals (Optional)",
+    "step4Full": "4. Clinical Guidance"
+  },
+
+  "demographics": {
+    "title": "Who is this assessment for?",
+    "subtitle": "Clinical rules depend on age, sex, and whether the person is pregnant or recently gave birth.",
+    "nameLabel": "Full name",
+    "namePlaceholder": "e.g. Rahul Patil",
+    "nameError": "Please enter the person's full name.",
+    "nameLengthError": "Full name must be at least 2 characters.",
+    "nameFormatError": "Name should contain letters and spaces only.",
+    "phoneLabel": "Mobile phone number",
+    "phonePlaceholder": "10-digit mobile number (e.g. 9876543210)",
+    "phoneHint": "Required for referral tracking, SMS updates, and healthcare worker follow-up.",
+    "phoneError": "Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.",
+    "phoneIncomplete": "10-digit number required ({count} more digits needed)",
+    "phoneStartInvalid": "Mobile number must start with 6, 7, 8, or 9 (e.g. 9876543210)",
+    "phoneValid": "Valid 10-digit mobile number",
+    "villageLabel": "Village / Town / City",
+    "villagePlaceholder": "e.g. Kurkheda or Gadchiroli",
+    "villageError": "Please enter the village or town name.",
+    "villageLengthError": "Village or town name must be at least 2 characters.",
+    "addressLabel": "Residential Address / Street",
+    "addressPlaceholder": "e.g. House No. 12, Main Road, Near Primary School",
+    "addressError": "Please enter residential address or landmark.",
+    "addressLengthError": "Address must be at least 3 characters.",
+    "abhaLabel": "ABHA / Ayushman Bharat Health ID (optional)",
+    "abhaPlaceholder": "14-digit ABHA number or address (optional)",
+    "abhaHint": "If available, this connects the triage record to your digital health locker.",
+    "ageLabel": "Age in years",
+    "yearsUnit": "years",
+    "ageError": "Please enter an age between 0 and 120 years.",
+    "agePlaceholder": "e.g. 3 or 32",
+    "ageHint": "For a baby under one year, use decimals (like 0.2 for two months). For older children or adults, enter their age in years.",
+    "ageBands": {
+      "infant": "Baby under 2 months",
+      "child": "Child (2 months to 5 years)",
+      "adult": "Adult (18 to 60)",
+      "elderly": "Senior (over 60)"
+    },
+    "sexLabel": "Sex",
+    "male": "Male",
+    "female": "Female",
+    "other": "Other",
+    "maternalTitle": "Pregnancy and delivery status",
+    "isPregnant": "Is this person currently pregnant?",
+    "isPostpartum": "Did this person give birth in the last 6 weeks?",
+    "yes": "Yes",
+    "no": "No",
+    "nextButton": "Continue to Symptoms"
+  },
+
+  "symptoms": {
+    "title": "What symptoms are they having?",
+    "subtitle": "Select everything that applies. Red items are urgent danger signs.",
+    "searchPlaceholder": "Search symptoms (e.g. cough, fever, pain)...",
+    "selectedCount": "Selected symptoms:",
+    "clearAll": "Clear all",
+    "dangerBadge": "DANGER SIGN",
+    "durationTitle": "How long have symptoms been present?",
+    "durationBuckets": {
+      "d0": "Today / just started",
+      "d2": "1-2 days",
+      "d4": "3-4 days",
+      "d6": "5-7 days",
+      "d10": "More than a week"
+    },
+    "emptyError": "Please select at least one symptom to evaluate.",
+    "categories": {
+      "all": "All",
+      "danger": "Urgent danger signs",
+      "respiratory": "Cough & breathing",
+      "fever": "Fever & infections",
+      "digestive": "Stomach & loose motions",
+      "maternal": "Pregnancy & childbirth",
+      "adult_emergency": "Severe adult emergencies"
+    },
+    "dangerSignAlert": "You selected one or more urgent danger signs. This person will likely need medical attention right away.",
+    "prevButton": "Back",
+    "skipVitalsButton": "Skip Vitals & Evaluate",
+    "nextVitalsButton": "Continue to Vitals",
+    "nlp": {
+      "panelTitle": "Describe symptoms in your own words (or use voice)",
+      "placeholder": "Type or speak symptoms, e.g. \"high fever and headache since yesterday\"",
+      "startMic": "Start voice input",
+      "stopMic": "Stop recording",
+      "listening": "Listening… speak now",
+      "extractButton": "Find matching symptoms",
+      "extracting": "Identifying symptoms…",
+      "noSpeechSupport": "Voice input is not supported in this browser. Please type symptoms instead.",
+      "micError": "Could not access microphone. Please check permissions and try again.",
+      "emptyTranscript": "Please type or speak some symptoms first.",
+      "noMatch": "No recognisable symptoms found. Try describing differently or select from the list below.",
+      "extractFailed": "Could not identify symptoms. Please try again or select from the list.",
+      "confirmTitle": "Are these the right symptoms?",
+      "confirmSubtitle": "Tap a symptom to unselect it, then confirm.",
+      "confirmHint": "Unselect any that were not mentioned. You can also add more from the list after confirming.",
+      "confirmBack": "Edit description",
+      "confirmAdd": "Confirm and add"
+    }
+  },
+
+  "vitals": {
+    "title": "Did you measure any vitals?",
+    "subtitle": "These are optional. If you have a thermometer, BP monitor, or pulse oximeter at home, enter what you measured. Otherwise, skip this step.",
+    "tempLabel": "Body temperature in Celsius",
+    "tempFeverHint": "37.5°C or higher counts as fever",
+    "pulseLabel": "Heart rate (beats per minute)",
+    "pulseHint": "Normal resting pulse for an adult is 60 to 100",
+    "bpLabel": "Blood pressure (mmHg)",
+    "systolic": "Top number (systolic)",
+    "diastolic": "Bottom number (diastolic)",
+    "bpHolder": "140/90 or higher indicates high blood pressure",
+    "spo2Label": "Oxygen level (SpO2 %)",
+    "spo2Hint": "Below 90% is a serious warning sign",
+    "rrLabel": "Breaths per minute",
+    "rrHint": "For small children, fast breathing is an important sign of pneumonia",
+    "evaluating": "Evaluating...",
+    "warnings": {
+      "fever": "Fever indicated (≥37.5°C)",
+      "highBp": "High blood pressure (≥140/90)",
+      "lowSpo2": "Severe danger: Oxygen below 90%",
+      "fastBreathing": "Fast breathing detected for age"
+    },
+    "prevButton": "Back",
+    "submitButton": "Evaluate Assessment"
+  },
+
+  "results": {
+    "title": "Triage Result & Guidance",
+    "slipHeader": "Government of Maharashtra — Clinical Triage Advice Slip",
+    "referenceLabel": "Reference",
+    "issuedLabel": "Issued",
+    "patientDetails": "Patient Details",
+    "nameLabel": "Name",
+    "ageSexLabel": "Age / Sex",
+    "villageLabel": "Village / Location",
+    "contactLabel": "Contact",
+    "abhaLabel": "ABHA ID",
+    "urgencyTierLabel": "Urgency Tier:",
+    "hoursLabel": "Hours:",
+    "printSlip": "Print Referral Slip",
+    "ruleEngineBadge": "Evaluated using verified NHM clinical rules",
+    "listenAudio": "Listen out loud",
+    "stopAudio": "Stop listening",
+    "urgencyLabels": {
+      "emergency": "Emergency: Get to a hospital now",
+      "high": "High urgency: See a doctor today",
+      "medium": "Medium urgency: Visit your local clinic",
+      "low": "Low urgency: Care for them at home"
+    },
+    "guidanceHeader": "What you should do:",
+    "whereToGo": "Where to go",
+    "whatToDoNext": "Emergency contacts",
+    "emergencyActions": {
+      "ambulance": "Call 108 for a free ambulance",
+      "helpline": "Call 104 for government health advice",
+      "ashaContact": "Contact your village ASHA worker"
+    },
+    "facilities": {
+      "districtHospital": {
+        "title": "District Hospital or First Referral Unit (FRU)",
+        "desc": "Equipped for 24/7 emergencies, surgeries, blood transfusions, and critical care.",
+        "timing": "Open 24 hours / 7 days"
+      },
+      "chc": {
+        "title": "Community Health Centre (CHC) / Rural Hospital",
+        "desc": "Secondary hospital with inpatient beds, doctor on duty, and laboratory services.",
+        "timing": "8:00 AM to 8:00 PM (Emergency 24 hours)"
+      },
+      "phc": {
+        "title": "Primary Health Centre (PHC)",
+        "desc": "Your local government clinic with a medical officer for physical examination.",
+        "timing": "9:00 AM to 2:00 PM, 4:00 PM to 6:00 PM"
+      },
+      "subcenter": {
+        "title": "Sub-Centre / ASHA Worker or Home Care",
+        "desc": "Village health post or home rest under guidance of your local ASHA worker.",
+        "timing": "9:00 AM to 1:00 PM"
+      }
+    },
+    "newTriage": "Start New Assessment",
+    "facilityNote": "You can save or print this page to show the health worker when you arrive."
+  },
+
+  "cookie": {
+    "text": "This portal uses essential local storage to remember your language preference. We do not use commercial tracking cookies or share your medical data. Read our",
+    "privacyPolicy": "Privacy Policy",
+    "understood": "Understood"
+  },
+
+  "footer": {
+    "deptTitle": "Swasthya Setu · Government of Maharashtra",
+    "deptSub": "Public Health Department · National Health Mission (NHM) · Smart India Hackathon (SIH26133)",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "facilityQueue": "Doctor Dashboard",
+    "ambulance": "108 Ambulance",
+    "helpline": "104 Helpline"
+  },
+
+  "common": {
+    "submitError": "Unable to complete evaluation right now. Please try again or visit your nearest primary health centre."
+  },
+
+  "facilityPage": {
+    "title": "Primary Health Centre (PHC) Clinical Triage Queue",
+    "subtitle": "Incoming triage submissions from offline ASHA workers and citizen self-assessments across Maharashtra districts.",
+    "filters": {
+      "all": "All",
+      "emergency": "Emergency",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "table": {
+      "idAndTime": "ID & Time",
+      "channel": "Channel",
+      "demographics": "Demographics",
+      "patientId": "Patient ID",
+      "time": "Time",
+      "ageSex": "Age / Sex",
+      "urgency": "Urgency",
+      "symptoms": "Symptoms",
+      "facility": "Facility",
+      "target": "Target",
+      "ruleTrace": "Rule Trace",
+      "interop": "Interoperability",
+      "action": "Action",
+      "details": "Details",
+      "years": "yr",
+      "inspectFhir": "Inspect FHIR",
+      "fhirReadyTag": "✓ FHIR Ready"
+    },
+    "drawer": {
+      "title": "Case Details & Clinical Rule Audit",
+      "patientDetails": "Patient Details",
+      "verifiedSymptoms": "Reported Symptoms",
+      "clinicalAdvice": "Deterministic Rule Advice",
+      "ruleTrace": "Rule Trace ID",
+      "fhirReady": "ABDM / FHIR R4 Bundle Ready",
+      "viewFhir": "View FHIR R4 JSON",
+      "close": "Close"
+    }
+  }
+}
