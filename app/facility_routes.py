@@ -409,6 +409,218 @@ async def list_facility_referrals(
     return results
 
 
+@router.get("/referrals/unassigned", response_model=List[ReferralItemResponse])
+async def list_unassigned_referrals(
+    current_staff: StaffSession = Depends(get_current_facility_staff),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    List unassigned referrals across the system (facility_id IS NULL and state = 'created').
+    Ordered by created_at ASC (oldest first).
+    Accessible by authenticated facility staff.
+    """
+    query = """
+        SELECT
+            r.id AS referral_id,
+            r.triage_record_id,
+            r.facility_id,
+            f.name AS facility_name,
+            f.level AS facility_level,
+            r.created_by_role,
+            r.state,
+            r.created_at,
+            r.updated_at,
+            p.id AS patient_id,
+            p.display_name AS patient_name,
+            p.phone AS patient_phone,
+            p.age_years AS patient_age_years,
+            p.sex AS patient_sex,
+            p.village AS patient_village,
+            tr.urgency,
+            tr.symptoms,
+            tr.vitals,
+            tr.recommended_action,
+            tr.citizen_message,
+            tr.rule_trace,
+            tr.requires_referral,
+            tr.referral_target_level
+        FROM referrals r
+        JOIN triage_records tr ON r.triage_record_id = tr.id
+        LEFT JOIN patients p ON tr.patient_id = p.id
+        LEFT JOIN facilities f ON r.facility_id = f.id
+        WHERE r.facility_id IS NULL AND r.state = 'created'
+        ORDER BY r.created_at ASC
+    """
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(query)
+
+    results: List[ReferralItemResponse] = []
+    for row in rows:
+        # Extract primary rule name from rule_trace
+        rule_trace_raw = row["rule_trace"]
+        rule_name = "TRIAGE_RULE_MATCH"
+        if isinstance(rule_trace_raw, list) and len(rule_trace_raw) > 0:
+            rule_name = str(rule_trace_raw[0])
+        elif isinstance(rule_trace_raw, str):
+            try:
+                parsed = json.loads(rule_trace_raw)
+                if isinstance(parsed, list) and len(parsed) > 0:
+                    rule_name = str(parsed[0])
+            except Exception:
+                pass
+
+        # Parse symptoms
+        symptoms_raw = row["symptoms"]
+        symptoms_list: List[str] = []
+        if isinstance(symptoms_raw, list):
+            symptoms_list = [str(s) for s in symptoms_raw]
+        elif isinstance(symptoms_raw, str):
+            try:
+                parsed = json.loads(symptoms_raw)
+                if isinstance(parsed, list):
+                    symptoms_list = [str(s) for s in parsed]
+            except Exception:
+                pass
+
+        # Parse vitals
+        vitals_raw = row["vitals"]
+        vitals_dict = None
+        if isinstance(vitals_raw, dict):
+            vitals_dict = vitals_raw
+        elif isinstance(vitals_raw, str):
+            try:
+                vitals_dict = json.loads(vitals_raw)
+            except Exception:
+                pass
+
+        results.append(
+            ReferralItemResponse(
+                id=str(row["referral_id"]),
+                triage_record_id=str(row["triage_record_id"]),
+                facility_id=str(row["facility_id"]) if row["facility_id"] else None,
+                facility_name=row["facility_name"] or None,
+                facility_level=row["facility_level"] or None,
+                created_by_role=row["created_by_role"],
+                state=str(row["state"]),
+                created_at=row["created_at"].isoformat() if row["created_at"] else datetime.now(timezone.utc).isoformat(),
+                updated_at=row["updated_at"].isoformat() if row["updated_at"] else datetime.now(timezone.utc).isoformat(),
+                patient_id=str(row["patient_id"]) if row["patient_id"] else None,
+                patient_name=row["patient_name"] or "Citizen Patient",
+                patient_phone=row["patient_phone"] or "N/A",
+                patient_age_years=row["patient_age_years"],
+                patient_sex=row["patient_sex"],
+                patient_village=row["patient_village"],
+                urgency=str(row["urgency"]).upper(),
+                rule_name=rule_name,
+                symptoms=symptoms_list,
+                vitals=vitals_dict,
+                recommended_action=row["recommended_action"],
+                citizen_message=row["citizen_message"],
+                requires_referral=bool(row["requires_referral"]),
+                referral_target_level=str(row["referral_target_level"]) if row["referral_target_level"] else None,
+            )
+        )
+
+    return results
+
+
+@router.post("/referrals/{referral_id}/accept", response_model=ReferralTransitionResponse)
+async def accept_unassigned_referral(
+    referral_id: str,
+    req: Optional[TransitionReferralRequest] = None,
+    current_staff: StaffSession = Depends(get_current_facility_staff),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Action: Accept Unassigned Referral (created -> in_transit, facility_id assigned).
+    - Auth: current_staff via get_current_facility_staff
+    - Only legal from state 'created' with facility_id IS NULL (returns 409 Conflict if already assigned or not in created state)
+    - Atomically assigns referrals.facility_id = current_staff.facility_id and state = 'in_transit'
+    - Audits transition in referral_state_transitions
+    """
+    try:
+        ref_uuid = uuid.UUID(referral_id)
+        staff_uuid = uuid.UUID(current_staff.staff_id)
+        facility_uuid = uuid.UUID(current_staff.facility_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid referral ID format.",
+        )
+
+    notes = req.notes if req and req.notes else f"Referral accepted by facility staff at {current_staff.facility_name or 'facility'}"
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            referral = await conn.fetchrow(
+                "SELECT id, facility_id, state FROM referrals WHERE id = $1 FOR UPDATE",
+                ref_uuid,
+            )
+
+            if not referral:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Referral with ID {referral_id} not found.",
+                )
+
+            current_facility_id = referral["facility_id"]
+            current_state_str = str(referral["state"])
+
+            if current_facility_id is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Referral is already assigned to a facility (facility_id: {current_facility_id}).",
+                )
+
+            if current_state_str != ReferralState.CREATED.value:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Cannot accept referral: current state is '{current_state_str}', expected '{ReferralState.CREATED.value}'.",
+                )
+
+            now_ts = datetime.now(timezone.utc)
+            target_state_enum = ReferralState.IN_TRANSIT
+
+            # Assign facility_id and update state to in_transit
+            await conn.execute(
+                """
+                UPDATE referrals
+                SET facility_id = $1, state = $2, updated_at = $3
+                WHERE id = $4
+                """,
+                facility_uuid,
+                target_state_enum.value,
+                now_ts,
+                ref_uuid,
+            )
+
+            # Insert audit transition log
+            await conn.execute(
+                """
+                INSERT INTO referral_state_transitions (
+                    referral_id, from_state, to_state, updated_by_staff_id, changed_at, notes
+                )
+                VALUES ($1, $2, $3, $4, $5, $6)
+                """,
+                ref_uuid,
+                current_state_str,
+                target_state_enum.value,
+                staff_uuid,
+                now_ts,
+                notes,
+            )
+
+    return ReferralTransitionResponse(
+        referral_id=referral_id,
+        previous_state=current_state_str,
+        new_state=ReferralState.IN_TRANSIT.value,
+        updated_by_staff_id=current_staff.staff_id,
+        updated_at=now_ts.isoformat(),
+        message=f"Referral successfully assigned to facility '{current_staff.facility_name or current_staff.facility_id}' and marked in_transit.",
+    )
+
+
 @router.post("/referrals/{referral_id}/receive", response_model=ReferralTransitionResponse)
 async def mark_referral_received(
     referral_id: str,
