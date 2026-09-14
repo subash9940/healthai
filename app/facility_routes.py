@@ -1,6 +1,7 @@
 import uuid
 import json
-from typing import List, Optional
+import time
+from typing import List, Optional, Dict, Tuple
 from datetime import datetime, timezone
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -29,6 +30,51 @@ from app.services.auth import (
 )
 
 router = APIRouter(prefix="/facility", tags=["facility"])
+
+# In-memory rate limiting for /facility/login brute-force protection
+# Key: phone_or_username, Value: (failed_count, last_failed_timestamp)
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_LOCKOUT_SECONDS = 60
+_login_failed_attempts: Dict[str, Tuple[int, float]] = {}
+
+
+def _check_login_rate_limit(identifier: str) -> None:
+    """Check if an identifier is currently locked out from logging in."""
+    now = time.time()
+    record = _login_failed_attempts.get(identifier)
+    if record:
+        failed_count, last_ts = record
+        if failed_count >= LOGIN_MAX_ATTEMPTS:
+            elapsed = now - last_ts
+            if elapsed < LOGIN_LOCKOUT_SECONDS:
+                remaining = int(LOGIN_LOCKOUT_SECONDS - elapsed)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Too many failed login attempts. Account temporarily locked for {remaining} seconds.",
+                )
+            else:
+                # Lockout expired, reset counter
+                _login_failed_attempts.pop(identifier, None)
+
+
+def _record_login_failure(identifier: str) -> None:
+    """Increment failed login attempts counter."""
+    now = time.time()
+    record = _login_failed_attempts.get(identifier)
+    if record:
+        failed_count, last_ts = record
+        # If previous attempts were from long ago (beyond lockout window), start fresh
+        if now - last_ts >= LOGIN_LOCKOUT_SECONDS and failed_count < LOGIN_MAX_ATTEMPTS:
+            _login_failed_attempts[identifier] = (1, now)
+        else:
+            _login_failed_attempts[identifier] = (failed_count + 1, now)
+    else:
+        _login_failed_attempts[identifier] = (1, now)
+
+
+def _record_login_success(identifier: str) -> None:
+    """Clear failed login attempts counter on successful authentication."""
+    _login_failed_attempts.pop(identifier, None)
 
 
 @router.get("/list", response_model=List[FacilityPublicItem])
@@ -201,9 +247,13 @@ async def facility_login(
     """
     Authenticate facility staff using phone_or_username and MPIN.
     Returns signed JWT session token scoped to their facility.
+    Includes brute-force lockout protection (5 failed attempts -> 60s lockout).
     """
     clean_identifier = req.phone_or_username.strip()
     clean_mpin = req.mpin.strip()
+
+    # Check brute-force lockout before DB query
+    _check_login_rate_limit(clean_identifier)
 
     async with pool.acquire() as conn:
         staff_row = await conn.fetchrow(
@@ -226,6 +276,7 @@ async def facility_login(
         )
 
     if not staff_row or not verify_mpin(clean_mpin, staff_row["mpin_hash"]):
+        _record_login_failure(clean_identifier)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid phone/username or MPIN.",
@@ -237,6 +288,9 @@ async def facility_login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Facility staff account has been deactivated.",
         )
+
+    # Clear failed attempt counter on successful login
+    _record_login_success(clean_identifier)
 
     staff_id_str = str(staff_row["id"])
     facility_id_str = str(staff_row["facility_id"])
