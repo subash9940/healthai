@@ -12,7 +12,12 @@ import asyncpg
 
 from app.db import get_pool
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "swasthya-setu-super-secure-facility-jwt-secret-key-32chars-min")
+JWT_SECRET = os.environ.get("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError(
+        "JWT_SECRET environment variable is not set. "
+        "Set a secure, random secret (at least 32 characters) in your .env file."
+    )
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
