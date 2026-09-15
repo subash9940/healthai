@@ -51,19 +51,18 @@ interface ReferralItem {
   referral_target_level?: string;
 }
 
-// Clean translucent SVG Eye icons
 function EyeIcon({ style }: { style?: React.CSSProperties }) {
   return (
     <svg
-      width="18"
-      height="18"
+      width="16"
+      height="16"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      style={{ opacity: 0.6, ...style }}
+      style={{ opacity: 0.7, ...style }}
     >
       <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
       <circle cx="12" cy="12" r="3" />
@@ -74,15 +73,15 @@ function EyeIcon({ style }: { style?: React.CSSProperties }) {
 function EyeOffIcon({ style }: { style?: React.CSSProperties }) {
   return (
     <svg
-      width="18"
-      height="18"
+      width="16"
+      height="16"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      style={{ opacity: 0.6, ...style }}
+      style={{ opacity: 0.7, ...style }}
     >
       <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
       <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
@@ -106,11 +105,12 @@ export default function FacilityDashboard() {
   // Sign Up Form state
   const [signupName, setSignupName] = useState('');
   const [signupPhone, setSignupPhone] = useState('');
-  const [signupRole, setSignupRole] = useState('medical_officer');
+  const [signupRole, setSignupRole] = useState('phc_staff');
   const [signupFacilityId, setSignupFacilityId] = useState('');
   const [signupMpin, setSignupMpin] = useState('');
   const [signupConfirmMpin, setSignupConfirmMpin] = useState('');
   const [showSignupMpin, setShowSignupMpin] = useState(false);
+  const [showSignupConfirmMpin, setShowSignupConfirmMpin] = useState(false);
   const [facilitiesList, setFacilitiesList] = useState<{ id: string; name: string; level: string; district?: string }[]>([]);
   const [signupLoading, setSignupLoading] = useState(false);
 
@@ -172,7 +172,6 @@ export default function FacilityDashboard() {
       });
 
       if (res.status === 401 || res.status === 403) {
-        // Token expired or invalid
         handleLogout();
         setLoginError('Session expired. Please sign in again.');
         return;
@@ -248,7 +247,7 @@ export default function FacilityDashboard() {
 
       setFacilityStatus(data);
       setIsEditingStatus(false);
-      setActionMessage({ text: `✓ Facility availability status updated to ${editStatus} (${editBeds} beds)`, type: 'success' });
+      setActionMessage({ text: `✓ Facility status updated: ${editStatus} (${editBeds} beds)`, type: 'success' });
     } catch (err: any) {
       setActionMessage({ text: `Error updating status: ${err?.message}`, type: 'error' });
     } finally {
@@ -292,7 +291,7 @@ export default function FacilityDashboard() {
     }
   };
 
-  // Handle Staff Registration (Sign Up)
+  // Handle Staff Registration
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!signupName.trim()) {
@@ -357,7 +356,37 @@ export default function FacilityDashboard() {
     localStorage.removeItem('swasthya_facility_staff');
   };
 
-  // Action: Mark Received at Facility
+  // Action: Accept Referral (created -> in_transit)
+  const handleAcceptReferral = async (item: ReferralItem) => {
+    if (!token) return;
+    setActionLoading(item.id);
+    setActionMessage(null);
+
+    try {
+      const res = await fetch(`/api/facility/referrals/${item.id}/accept`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ notes: `Referral accepted by ${staff?.name || 'Staff'}` }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || data.error || 'Failed to accept referral');
+      }
+
+      setActionMessage({ text: `✓ Referral ${item.id.slice(0, 8)} accepted (In Transit)`, type: 'success' });
+      await fetchReferrals(token);
+    } catch (err: any) {
+      setActionMessage({ text: `Error: ${err?.message}`, type: 'error' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Action: Mark Received at Facility (in_transit -> received_at_facility)
   const handleMarkReceived = async (item: ReferralItem) => {
     if (!token) return;
     setActionLoading(item.id);
@@ -387,7 +416,7 @@ export default function FacilityDashboard() {
     }
   };
 
-  // Action: Close Referral
+  // Action: Close Referral (received_at_facility -> closed)
   const handleCloseReferral = async (item: ReferralItem) => {
     if (!token) return;
     setActionLoading(item.id);
@@ -418,6 +447,11 @@ export default function FacilityDashboard() {
   };
 
   const filteredQueue = queue.filter((item) => (filter === 'ALL' ? true : item.urgency === filter));
+
+  const countEmergency = queue.filter((i) => i.urgency === 'EMERGENCY').length;
+  const countHigh = queue.filter((i) => i.urgency === 'HIGH').length;
+  const countMedium = queue.filter((i) => i.urgency === 'MEDIUM').length;
+  const countLow = queue.filter((i) => i.urgency === 'LOW').length;
 
   const handleCopyFhir = (item: ReferralItem) => {
     const fhirBundle = {
@@ -455,9 +489,87 @@ export default function FacilityDashboard() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const currentYear = new Date().getFullYear();
+  const getUrgencyTheme = (urgency: string) => {
+    switch (urgency) {
+      case 'EMERGENCY':
+        return {
+          stripe: '#C7372F',
+          bg: '#FEF2F2',
+          text: '#991B1B',
+          border: '#FECACA',
+          label: 'EMERGENCY',
+        };
+      case 'HIGH':
+        return {
+          stripe: '#D97706',
+          bg: '#FFFBEB',
+          text: '#92400E',
+          border: '#FDE68A',
+          label: 'HIGH PRIORITY',
+        };
+      case 'MEDIUM':
+        return {
+          stripe: '#CA8A04',
+          bg: '#FEFCE8',
+          text: '#854D0E',
+          border: '#FEF08A',
+          label: 'MEDIUM',
+        };
+      case 'LOW':
+      default:
+        return {
+          stripe: '#2F7D5D',
+          bg: '#F0FDF4',
+          text: '#166534',
+          border: '#BBF7D0',
+          label: 'LOW URGENCY',
+        };
+    }
+  };
 
-  // If not logged in, render the Facility Staff Auth Gate (Sign In / Sign Up)
+  const getStateBadge = (state: string) => {
+    switch (state) {
+      case 'created':
+        return {
+          label: 'Awaiting Transit',
+          bg: '#F1F5F9',
+          text: '#475569',
+          border: '#CBD5E1',
+        };
+      case 'in_transit':
+        return {
+          label: 'In Transit',
+          bg: '#EFF6FF',
+          text: '#1D4ED8',
+          border: '#BFDBFE',
+        };
+      case 'received_at_facility':
+        return {
+          label: 'Arrived at Facility',
+          bg: '#ECFDF5',
+          text: '#047857',
+          border: '#A7F3D0',
+        };
+      case 'closed':
+        return {
+          label: 'Closed / Treated',
+          bg: '#F8FAFC',
+          text: '#64748B',
+          border: '#E2E8F0',
+        };
+      default:
+        return {
+          label: state,
+          bg: '#F1F5F9',
+          text: '#475569',
+          border: '#CBD5E1',
+        };
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // UNAUTHENTICATED VIEW: SIGN IN & SIGN UP (ORIGINAL WEB DESIGN)
+  // --------------------------------------------------------------------------
   if (!token || !staff) {
     return (
       <main className="page-container" style={{ maxWidth: '520px', marginTop: '30px', marginBottom: '40px' }}>
@@ -547,106 +659,114 @@ export default function FacilityDashboard() {
           {loginError && (
             <div
               style={{
-                padding: '12px 16px',
-                background: 'var(--urgency-emergency-bg)',
-                border: '1px solid var(--urgency-emergency-border)',
+                padding: '12px',
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
                 borderRadius: 'var(--radius-sm)',
-                color: 'var(--urgency-emergency)',
+                color: '#991b1b',
                 fontSize: '13px',
-                marginBottom: '20px',
-                fontWeight: 500,
+                marginBottom: '16px',
               }}
             >
-              ⚠️ {loginError}
+              {loginError}
             </div>
           )}
 
           {/* TAB 1: SIGN IN FORM */}
           {authTab === 'signin' ? (
             <form onSubmit={handleLogin}>
+              {/* Quick Preset Selector for Demo/Testing */}
               <div style={{ marginBottom: '16px' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: 'var(--text-body)',
-                    marginBottom: '6px',
-                  }}
-                >
-                  Staff Phone / Username
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>
+                  Quick Staff Select (Demo Logins)
+                </label>
+                <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+                  {[
+                    { label: 'Dr. Sharma (MO)', phone: '9876543210', pin: '1234' },
+                    { label: 'Sister Anita (Staff)', phone: '9876543211', pin: '1234' },
+                    { label: 'Admin Patil (Super)', phone: '9876543212', pin: '1234' },
+                  ].map((p) => (
+                    <button
+                      key={p.phone}
+                      type="button"
+                      onClick={() => {
+                        setUsername(p.phone);
+                        setMpin(p.pin);
+                      }}
+                      style={{
+                        padding: '6px 10px',
+                        fontSize: '11px',
+                        background: 'var(--bg-subtle)',
+                        border: '1px solid var(--border-medium)',
+                        borderRadius: 'var(--radius-sm)',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        color: 'var(--text-dark)',
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                  Phone Number or Username
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. 9876543201 or doc_shirur"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  placeholder="e.g. 9876543210 or dr_sharma"
                   required
                   style={{
                     width: '100%',
-                    padding: '10px 14px',
+                    padding: '10px 12px',
                     borderRadius: 'var(--radius-sm)',
                     border: '1px solid var(--border-medium)',
                     fontSize: '14px',
-                    outline: 'none',
+                    boxSizing: 'border-box',
                   }}
                 />
               </div>
 
-              <div style={{ marginBottom: '24px' }}>
+              <div style={{ marginBottom: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <label
-                    style={{
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      color: 'var(--text-body)',
-                    }}
-                  >
-                    4-Digit Security MPIN
-                  </label>
-                </div>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type={showMpin ? 'text' : 'password'}
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={4}
-                    placeholder="••••"
-                    value={mpin}
-                    onChange={(e) => setMpin(e.target.value)}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '10px 42px 10px 14px',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid var(--border-medium)',
-                      fontSize: '16px',
-                      letterSpacing: showMpin ? '2px' : '4px',
-                      outline: 'none',
-                    }}
-                  />
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>4-Digit MPIN</label>
                   <button
                     type="button"
                     onClick={() => setShowMpin(!showMpin)}
-                    aria-label={showMpin ? 'Hide PIN' : 'Show PIN'}
                     style={{
-                      position: 'absolute',
-                      right: '10px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
                       background: 'none',
                       border: 'none',
+                      color: 'var(--primary)',
+                      fontSize: '12px',
                       cursor: 'pointer',
-                      padding: '6px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'var(--text-muted)',
+                      padding: 0,
                     }}
                   >
-                    {showMpin ? <EyeOffIcon /> : <EyeIcon />}
+                    {showMpin ? 'Hide' : 'Show'}
                   </button>
                 </div>
+                <input
+                  type={showMpin ? 'text' : 'password'}
+                  maxLength={4}
+                  value={mpin}
+                  onChange={(e) => setMpin(e.target.value)}
+                  placeholder="••••"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-medium)',
+                    fontSize: '18px',
+                    letterSpacing: '0.3em',
+                    textAlign: 'center',
+                    boxSizing: 'border-box',
+                  }}
+                />
               </div>
 
               <button
@@ -656,292 +776,182 @@ export default function FacilityDashboard() {
                 style={{
                   width: '100%',
                   padding: '12px',
-                  fontSize: '15px',
+                  fontSize: '14px',
                   fontWeight: 700,
-                  cursor: loginLoading ? 'not-allowed' : 'pointer',
                   opacity: loginLoading ? 0.7 : 1,
+                  cursor: loginLoading ? 'not-allowed' : 'pointer',
                 }}
               >
-                {loginLoading ? 'Authenticating...' : 'Sign In to Facility Dashboard'}
+                {loginLoading ? 'Authenticating...' : 'Sign In to Referral Queue'}
               </button>
-
-              {/* Demo Quick Logins */}
-              <div
-                style={{
-                  marginTop: '20px',
-                  padding: '14px',
-                  background: 'var(--bg-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '12px',
-                  color: 'var(--text-muted)',
-                  lineHeight: 1.5,
-                }}
-              >
-                <div style={{ fontWeight: 700, marginBottom: '8px', color: 'var(--text-dark)' }}>
-                  Demo Authorized Accounts (One-Click Test):
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUsername('9876543201');
-                      setMpin('1234');
-                    }}
-                    style={{
-                      textAlign: 'left',
-                      padding: '6px 10px',
-                      background: '#ffffff',
-                      border: '1px solid var(--border-light)',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    🏥 <strong>PHC Shirur:</strong> Dr. Amit (<code>9876543201</code> / PIN: <code>1234</code>)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUsername('9876543202');
-                      setMpin('1234');
-                    }}
-                    style={{
-                      textAlign: 'left',
-                      padding: '6px 10px',
-                      background: '#ffffff',
-                      border: '1px solid var(--border-light)',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    🏥 <strong>CHC Haveli:</strong> Dr. Priya (<code>9876543202</code> / PIN: <code>1234</code>)
-                  </button>
-                </div>
-              </div>
             </form>
           ) : (
             /* TAB 2: SIGN UP / REGISTRATION FORM */
             <form onSubmit={handleSignup}>
               <div style={{ marginBottom: '14px' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: 'var(--text-body)',
-                    marginBottom: '6px',
-                  }}
-                >
-                  Full Name & Title
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                  Full Official Name
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Dr. Sneha Kulkarni"
                   value={signupName}
                   onChange={(e) => setSignupName(e.target.value)}
+                  placeholder="e.g. Dr. Rajesh Kumar"
                   required
                   style={{
                     width: '100%',
-                    padding: '10px 14px',
+                    padding: '10px 12px',
                     borderRadius: 'var(--radius-sm)',
                     border: '1px solid var(--border-medium)',
                     fontSize: '14px',
-                    outline: 'none',
+                    boxSizing: 'border-box',
                   }}
                 />
               </div>
 
               <div style={{ marginBottom: '14px' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: 'var(--text-body)',
-                    marginBottom: '6px',
-                  }}
-                >
-                  Mobile Number / Username
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                  Mobile Number
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. 9823001122"
                   value={signupPhone}
                   onChange={(e) => setSignupPhone(e.target.value)}
+                  placeholder="10-digit mobile number"
+                  maxLength={10}
                   required
                   style={{
                     width: '100%',
-                    padding: '10px 14px',
+                    padding: '10px 12px',
                     borderRadius: 'var(--radius-sm)',
                     border: '1px solid var(--border-medium)',
                     fontSize: '14px',
-                    outline: 'none',
+                    boxSizing: 'border-box',
                   }}
                 />
               </div>
 
               <div style={{ marginBottom: '14px' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: 'var(--text-body)',
-                    marginBottom: '6px',
-                  }}
-                >
-                  Staff Role
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                  Cadre Role
                 </label>
                 <select
                   value={signupRole}
                   onChange={(e) => setSignupRole(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '10px 14px',
+                    padding: '10px 12px',
                     borderRadius: 'var(--radius-sm)',
                     border: '1px solid var(--border-medium)',
                     fontSize: '14px',
-                    outline: 'none',
+                    boxSizing: 'border-box',
                     background: '#ffffff',
                   }}
                 >
-                  <option value="medical_officer">Medical Officer (MO / Doctor)</option>
-                  <option value="phc_staff">Staff Nurse / Clinical Staff</option>
-                  <option value="admin">Facility Administrator</option>
+                  <option value="phc_staff">PHC Staff / Medical Officer</option>
+                  <option value="supervisor">Supervisor / Admin</option>
                 </select>
               </div>
 
               <div style={{ marginBottom: '14px' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: 'var(--text-body)',
-                    marginBottom: '6px',
-                  }}
-                >
-                  Assigned Healthcare Facility
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                  Assigned Health Facility
                 </label>
                 <select
                   value={signupFacilityId}
                   onChange={(e) => setSignupFacilityId(e.target.value)}
-                  required
                   style={{
                     width: '100%',
-                    padding: '10px 14px',
+                    padding: '10px 12px',
                     borderRadius: 'var(--radius-sm)',
                     border: '1px solid var(--border-medium)',
                     fontSize: '14px',
-                    outline: 'none',
+                    boxSizing: 'border-box',
                     background: '#ffffff',
                   }}
                 >
-                  {facilitiesList.length > 0 ? (
-                    facilitiesList.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name} ({f.level.toUpperCase()})
-                      </option>
-                    ))
-                  ) : (
-                    <>
-                      <option value="e0a1b2c3-d4e5-4f6a-b7c8-d9e0f1a2b3c4">PHC Shirur (प्राथमिक आरोग्य केंद्र)</option>
-                      <option value="f1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d">CHC Haveli (सामुदायिक आरोग्य केंद्र)</option>
-                    </>
-                  )}
+                  {facilitiesList.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name} ({f.level}){f.district ? ` - ${f.district}` : ''}
+                    </option>
+                  ))}
                 </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
-                <div>
-                  <label
+              <div style={{ marginBottom: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>Create 4-Digit MPIN</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowSignupMpin(!showSignupMpin)}
                     style={{
-                      display: 'block',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      color: 'var(--text-body)',
-                      marginBottom: '6px',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--primary)',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      padding: 0,
                     }}
                   >
-                    4-Digit MPIN
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type={showSignupMpin ? 'text' : 'password'}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={4}
-                      placeholder="••••"
-                      value={signupMpin}
-                      onChange={(e) => setSignupMpin(e.target.value)}
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '10px 36px 10px 12px',
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1px solid var(--border-medium)',
-                        fontSize: '15px',
-                        letterSpacing: showSignupMpin ? '2px' : '3px',
-                        outline: 'none',
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowSignupMpin(!showSignupMpin)}
-                      aria-label={showSignupMpin ? 'Hide PIN' : 'Show PIN'}
-                      style={{
-                        position: 'absolute',
-                        right: '6px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'var(--text-muted)',
-                      }}
-                    >
-                      {showSignupMpin ? <EyeOffIcon /> : <EyeIcon />}
-                    </button>
-                  </div>
+                    {showSignupMpin ? 'Hide' : 'Show'}
+                  </button>
                 </div>
+                <input
+                  type={showSignupMpin ? 'text' : 'password'}
+                  maxLength={4}
+                  value={signupMpin}
+                  onChange={(e) => setSignupMpin(e.target.value)}
+                  placeholder="••••"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-medium)',
+                    fontSize: '18px',
+                    letterSpacing: '0.3em',
+                    textAlign: 'center',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
 
-                <div>
-                  <label
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>Confirm 4-Digit MPIN</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowSignupConfirmMpin(!showSignupConfirmMpin)}
                     style={{
-                      display: 'block',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      color: 'var(--text-body)',
-                      marginBottom: '6px',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--primary)',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      padding: 0,
                     }}
                   >
-                    Confirm MPIN
-                  </label>
-                  <input
-                    type={showSignupMpin ? 'text' : 'password'}
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={4}
-                    placeholder="••••"
-                    value={signupConfirmMpin}
-                    onChange={(e) => setSignupConfirmMpin(e.target.value)}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid var(--border-medium)',
-                      fontSize: '15px',
-                      letterSpacing: showSignupMpin ? '2px' : '3px',
-                      outline: 'none',
-                    }}
-                  />
+                    {showSignupConfirmMpin ? 'Hide' : 'Show'}
+                  </button>
                 </div>
+                <input
+                  type={showSignupConfirmMpin ? 'text' : 'password'}
+                  maxLength={4}
+                  value={signupConfirmMpin}
+                  onChange={(e) => setSignupConfirmMpin(e.target.value)}
+                  placeholder="••••"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-medium)',
+                    fontSize: '18px',
+                    letterSpacing: '0.3em',
+                    textAlign: 'center',
+                    boxSizing: 'border-box',
+                  }}
+                />
               </div>
 
               <button
@@ -951,13 +961,13 @@ export default function FacilityDashboard() {
                 style={{
                   width: '100%',
                   padding: '12px',
-                  fontSize: '15px',
+                  fontSize: '14px',
                   fontWeight: 700,
-                  cursor: signupLoading ? 'not-allowed' : 'pointer',
                   opacity: signupLoading ? 0.7 : 1,
+                  cursor: signupLoading ? 'not-allowed' : 'pointer',
                 }}
               >
-                {signupLoading ? 'Registering Account...' : 'Create Staff Account & Enter Portal'}
+                {signupLoading ? 'Registering...' : 'Register & Access Queue'}
               </button>
             </form>
           )}
@@ -972,647 +982,554 @@ export default function FacilityDashboard() {
     );
   }
 
-  // Logged-in Facility Dashboard View
+  // --------------------------------------------------------------------------
+  // AUTHENTICATED FACILITY DASHBOARD VIEW (STITCH DESIGN SYSTEM)
+  // --------------------------------------------------------------------------
   return (
-    <main className="page-container" style={{ maxWidth: '1100px' }}>
-      {/* Facility Header Card */}
-      <div className="form-card" style={{ marginBottom: '20px' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '16px',
-            borderBottom: '1px solid var(--border-light)',
-            paddingBottom: '16px',
-            marginBottom: '16px',
-          }}
-        >
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '20px' }}>🏥</span>
-              <h1 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-dark)', margin: 0 }}>
-                {staff.facility_name || 'Assigned Facility'}
-              </h1>
-              <span
-                style={{
-                  padding: '2px 8px',
-                  borderRadius: '12px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  background: 'var(--primary-light)',
-                  color: 'var(--primary-dark)',
-                }}
-              >
-                {staff.facility_level || 'PHC'}
-              </span>
+    <main className="min-h-screen bg-[#F8FAFC] font-['IBM_Plex_Sans',sans-serif] text-slate-800 flex flex-col justify-between">
+      {/* Top Navigation Bar */}
+      <header className="bg-[#0f766e] text-white border-b border-[#0d6560] px-4 py-3 sm:px-6 shadow-sm">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 rounded-[6px] bg-white/15 flex items-center justify-center text-white border border-white/20">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+              </svg>
             </div>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Logged in as: <strong>{staff.name}</strong> ({staff.role}) • Scoped to Facility ID:{' '}
-              <code style={{ fontSize: '11px' }}>{staff.facility_id.slice(0, 8)}...</code>
-            </p>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h1 className="text-base font-bold tracking-tight">{staff.facility_name || 'Healthcare Facility'}</h1>
+                <span className="text-[10px] bg-teal-900/60 text-teal-100 font-mono px-1.5 py-0.5 rounded-[4px] uppercase border border-teal-500/30">
+                  {staff.facility_level || 'FRU/DH'}
+                </span>
+              </div>
+              <p className="text-[11px] text-teal-100/90">
+                Staff: <span className="font-semibold text-white">{staff.name}</span> ({staff.role.replace(/_/g, ' ')})
+              </p>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div className="flex items-center space-x-2 self-end md:self-auto">
             <button
-              type="button"
-              onClick={() => fetchReferrals(token)}
+              onClick={() => token && fetchReferrals(token)}
               disabled={loadingQueue}
-              className="btn-secondary"
-              style={{ padding: '8px 14px', fontSize: '13px' }}
+              className="px-3 py-1.5 bg-teal-800/80 hover:bg-teal-800 text-white text-xs font-semibold rounded-[4px] border border-teal-600/50 flex items-center space-x-1.5 cursor-pointer transition-colors"
             >
-              {loadingQueue ? '⏳ Refreshing...' : '🔄 Refresh Queue'}
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={loadingQueue ? 'animate-spin' : ''}>
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path>
+              </svg>
+              <span>{loadingQueue ? 'Refreshing...' : 'Refresh Queue'}</span>
             </button>
-            <Link href="/" className="btn-primary" style={{ padding: '8px 14px', fontSize: '13px' }}>
-              + Citizen Triage
-            </Link>
             <button
-              type="button"
               onClick={handleLogout}
-              className="btn-secondary"
-              style={{
-                padding: '8px 14px',
-                fontSize: '13px',
-                color: 'var(--urgency-emergency)',
-                borderColor: 'var(--urgency-emergency-border)',
-              }}
+              className="px-3 py-1.5 bg-teal-950/60 hover:bg-teal-950 text-teal-100 hover:text-white text-xs font-semibold rounded-[4px] border border-teal-800/60 cursor-pointer transition-colors"
             >
               Sign Out
             </button>
           </div>
         </div>
+      </header>
 
-        {/* Action toast feedback */}
-        {actionMessage && (
-          <div
-            style={{
-              padding: '10px 16px',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '13px',
-              fontWeight: 600,
-              marginBottom: '16px',
-              background:
-                actionMessage.type === 'success' ? 'var(--urgency-low-bg)' : 'var(--urgency-emergency-bg)',
-              color:
-                actionMessage.type === 'success' ? 'var(--urgency-low)' : 'var(--urgency-emergency)',
-              border: `1px solid ${
-                actionMessage.type === 'success'
-                  ? 'var(--urgency-low-border)'
-                  : 'var(--urgency-emergency-border)'
-              }`,
-            }}
-          >
-            {actionMessage.text}
-          </div>
-        )}
-
-        {/* Facility Operational Availability & Bed Capacity Panel */}
-        <div
-          style={{
-            background: 'var(--bg-subtle)',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--border-medium)',
-            padding: '16px',
-            marginBottom: '20px',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '12px',
-              marginBottom: isEditingStatus ? '16px' : '0',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+      {/* Main Content Body */}
+      <div className="max-w-7xl mx-auto w-full px-4 py-5 sm:px-6 flex-1 space-y-4">
+        {/* Operational Status & Capacity Broadcast Banner */}
+        <div className="bg-white border border-slate-200 rounded-[2px] p-4 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3">
+              <div
+                className={`w-3 h-3 rounded-full ${
+                  facilityStatus?.operational_status === 'AVAILABLE'
+                    ? 'bg-emerald-500'
+                    : facilityStatus?.operational_status === 'BUSY'
+                    ? 'bg-amber-500'
+                    : facilityStatus?.operational_status === 'EMERGENCY_ONLY'
+                    ? 'bg-red-500'
+                    : 'bg-slate-500'
+                }`}
+              />
               <div>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block' }}>
-                  Operational Status
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '4px 10px',
-                      borderRadius: '6px',
-                      fontSize: '13px',
-                      fontWeight: 800,
-                      background:
-                        facilityStatus?.operational_status === 'AVAILABLE'
-                          ? 'var(--urgency-low-bg)'
-                          : facilityStatus?.operational_status === 'BUSY'
-                          ? 'var(--urgency-high-bg)'
-                          : facilityStatus?.operational_status === 'EMERGENCY_ONLY'
-                          ? 'var(--urgency-medium-bg)'
-                          : 'var(--urgency-emergency-bg)',
-                      color:
-                        facilityStatus?.operational_status === 'AVAILABLE'
-                          ? 'var(--urgency-low)'
-                          : facilityStatus?.operational_status === 'BUSY'
-                          ? 'var(--urgency-high)'
-                          : facilityStatus?.operational_status === 'EMERGENCY_ONLY'
-                          ? 'var(--urgency-medium)'
-                          : 'var(--urgency-emergency)',
-                      border: `1px solid ${
-                        facilityStatus?.operational_status === 'AVAILABLE'
-                          ? 'var(--urgency-low-border)'
-                          : facilityStatus?.operational_status === 'BUSY'
-                          ? 'var(--urgency-high-border)'
-                          : facilityStatus?.operational_status === 'EMERGENCY_ONLY'
-                          ? 'var(--urgency-medium-border)'
-                          : 'var(--urgency-emergency-border)'
-                      }`,
-                    }}
-                  >
-                    <span>
-                      {facilityStatus?.operational_status === 'AVAILABLE'
-                        ? '🟢'
-                        : facilityStatus?.operational_status === 'BUSY'
-                        ? '🟡'
-                        : facilityStatus?.operational_status === 'EMERGENCY_ONLY'
-                        ? '🟠'
-                        : '🔴'}
-                    </span>
-                    {facilityStatus?.operational_status || 'AVAILABLE'}
-                  </span>
-
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '4px 10px',
-                      borderRadius: '6px',
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      background: '#eff6ff',
-                      color: '#1d4ed8',
-                      border: '1px solid #bfdbfe',
-                    }}
-                  >
-                    🛏️ {facilityStatus?.available_beds ?? 10} Available Beds
-                  </span>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Facility Capacity & Operational Broadcast
+                </div>
+                <div className="text-sm font-bold text-slate-900 mt-0.5 flex items-center space-x-2">
+                  <span>Status: {facilityStatus?.operational_status || 'AVAILABLE'}</span>
+                  <span className="text-slate-300">•</span>
+                  <span>Beds Available: {facilityStatus?.available_beds ?? '--'}</span>
+                  {facilityStatus?.status_note && (
+                    <>
+                      <span className="text-slate-300">•</span>
+                      <span className="text-xs font-normal text-slate-600 italic">
+                        "{facilityStatus.status_note}"
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
-
-              {facilityStatus?.status_note && (
-                <div style={{ marginLeft: '8px', borderLeft: '2px solid var(--border-medium)', paddingLeft: '12px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block' }}>
-                    Facility Broadcast Note
-                  </span>
-                  <p style={{ fontSize: '13px', color: 'var(--text-dark)', margin: '4px 0 0', fontWeight: 500 }}>
-                    "{facilityStatus.status_note}"
-                  </p>
-                </div>
-              )}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {facilityStatus?.updated_at && (
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  Updated: {new Date(facilityStatus.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}{' '}
-                  {facilityStatus.updated_by_staff_name ? `by ${facilityStatus.updated_by_staff_name}` : ''}
-                </span>
-              )}
-              <button
-                type="button"
-                className="btn-secondary"
-                style={{ padding: '6px 12px', fontSize: '12px', minHeight: 'auto' }}
-                onClick={() => setIsEditingStatus(!isEditingStatus)}
-              >
-                {isEditingStatus ? 'Cancel Edit' : '✏️ Update Availability'}
-              </button>
-            </div>
+            <button
+              onClick={() => setIsEditingStatus(!isEditingStatus)}
+              className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-[2px] border border-slate-300 self-start sm:self-auto cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+              </svg>
+              <span>{isEditingStatus ? 'Cancel Edit' : 'Broadcast Capacity'}</span>
+            </button>
           </div>
 
-          {/* Quick Edit Drawer */}
+          {/* Edit Capacity Expandable Panel */}
           {isEditingStatus && (
-            <form
-              onSubmit={handleUpdateFacilityStatus}
-              style={{
-                marginTop: '12px',
-                paddingTop: '16px',
-                borderTop: '1px dashed var(--border-medium)',
-              }}
-            >
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '14px' }}>
-                {/* Status Selector */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-body)', marginBottom: '6px' }}>
-                    Operational Availability Status
-                  </label>
-                  <select
-                    value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value as any)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid var(--border-medium)',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      background: '#ffffff',
-                    }}
-                  >
-                    <option value="AVAILABLE">🟢 AVAILABLE — Normal Operations</option>
-                    <option value="BUSY">🟡 BUSY — High Load / Minor Delays</option>
-                    <option value="EMERGENCY_ONLY">🟠 EMERGENCY ONLY — Critical Cases Only</option>
-                    <option value="FULL">🔴 FULL — Divert Routine Admissions</option>
-                  </select>
-                </div>
-
-                {/* Beds input */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-body)', marginBottom: '6px' }}>
-                    Available Inpatient Beds
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <button
-                      type="button"
-                      onClick={() => setEditBeds(Math.max(0, editBeds - 1))}
-                      style={{
-                        padding: '8px 12px',
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1px solid var(--border-medium)',
-                        background: '#ffffff',
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                      }}
-                    >
-                      -
-                    </button>
-                    <input
-                      type="number"
-                      min={0}
-                      max={999}
-                      value={editBeds}
-                      onChange={(e) => setEditBeds(Math.max(0, parseInt(e.target.value) || 0))}
-                      style={{
-                        flex: 1,
-                        padding: '8px 12px',
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1px solid var(--border-medium)',
-                        fontSize: '13px',
-                        fontWeight: 700,
-                        textAlign: 'center',
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setEditBeds(editBeds + 1)}
-                      style={{
-                        padding: '8px 12px',
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1px solid var(--border-medium)',
-                        background: '#ffffff',
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                      }}
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-
-                {/* Broadcast Note */}
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-body)', marginBottom: '6px' }}>
-                    Public Broadcast Note for ASHA &amp; Field Workers (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Oxygen beds ready, ultrasound on duty until 5 PM, MO in OT"
-                    value={editNote}
-                    onChange={(e) => setEditNote(e.target.value)}
-                    maxLength={200}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid var(--border-medium)',
-                      fontSize: '13px',
-                      background: '#ffffff',
-                    }}
-                  />
-                </div>
+            <form onSubmit={handleUpdateFacilityStatus} className="mt-4 pt-4 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                  Operational Status
+                </label>
+                <select
+                  value={editStatus}
+                  onChange={(e: any) => setEditStatus(e.target.value)}
+                  className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded-[2px] bg-slate-50"
+                >
+                  <option value="AVAILABLE">AVAILABLE (Normal)</option>
+                  <option value="BUSY">BUSY (High Load)</option>
+                  <option value="EMERGENCY_ONLY">EMERGENCY ONLY</option>
+                  <option value="FULL">FULL (No Capacity)</option>
+                </select>
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setIsEditingStatus(false)}
-                  style={{ padding: '6px 14px', fontSize: '12px', minHeight: 'auto' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={statusUpdating}
-                  className="btn-primary"
-                  style={{ padding: '6px 16px', fontSize: '12px', minHeight: 'auto' }}
-                >
-                  {statusUpdating ? 'Saving...' : '💾 Save Availability Status'}
-                </button>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                  Available Beds
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={500}
+                  value={editBeds}
+                  onChange={(e) => setEditBeds(Number(e.target.value))}
+                  className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded-[2px] bg-slate-50"
+                />
               </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                  Broadcast Note (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. O2 beds ready, CT operational"
+                  value={editNote}
+                  onChange={(e) => setEditNote(e.target.value)}
+                  className="w-full text-xs px-2 py-1.5 border border-slate-300 rounded-[2px] bg-slate-50"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={statusUpdating}
+                className="py-1.5 px-4 bg-[#12324D] hover:bg-[#0A1E30] text-white text-xs font-bold uppercase rounded-[2px] disabled:opacity-50 cursor-pointer"
+              >
+                {statusUpdating ? 'Saving...' : 'Publish Update'}
+              </button>
             </form>
           )}
         </div>
 
-        {queueError && (
+        {/* Global Action Messages */}
+        {actionMessage && (
           <div
-            style={{
-              padding: '10px 16px',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '13px',
-              marginBottom: '16px',
-              background: 'var(--urgency-emergency-bg)',
-              color: 'var(--urgency-emergency)',
-            }}
+            className={`p-3 text-xs font-medium rounded-[2px] border-l-4 flex items-center justify-between ${
+              actionMessage.type === 'success'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-500'
+                : 'bg-red-50 text-red-800 border-[#C7372F]'
+            }`}
           >
-            ⚠️ {queueError}
+            <span>{actionMessage.text}</span>
+            <button
+              onClick={() => setActionMessage(null)}
+              className="text-slate-400 hover:text-slate-700 ml-4 font-bold"
+            >
+              ✕
+            </button>
           </div>
         )}
 
-        {/* Filter Pills */}
-        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '16px' }}>
-          {(['ALL', 'EMERGENCY', 'HIGH', 'MEDIUM', 'LOW'] as const).map((f) => (
+        {/* Filter Chip Bar & Summary Counts */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 border border-slate-200 rounded-[2px]">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mr-1">
+              Urgency:
+            </span>
             <button
-              key={f}
-              type="button"
-              className={`cat-btn ${filter === f ? 'active' : ''}`}
-              onClick={() => setFilter(f)}
-              aria-pressed={filter === f}
+              onClick={() => setFilter('ALL')}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-[2px] border transition-colors cursor-pointer ${
+                filter === 'ALL'
+                  ? 'bg-[#12324D] text-white border-[#12324D]'
+                  : 'bg-slate-50 text-slate-600 border-slate-300 hover:bg-slate-100'
+              }`}
             >
-              {f} ({f === 'ALL' ? queue.length : queue.filter((q) => q.urgency === f).length})
+              ALL ({queue.length})
             </button>
-          ))}
+            <button
+              onClick={() => setFilter('EMERGENCY')}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-[2px] border transition-colors cursor-pointer ${
+                filter === 'EMERGENCY'
+                  ? 'bg-[#C7372F] text-white border-[#C7372F]'
+                  : 'bg-red-50 text-[#C7372F] border-red-200 hover:bg-red-100'
+              }`}
+            >
+              EMERGENCY ({countEmergency})
+            </button>
+            <button
+              onClick={() => setFilter('HIGH')}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-[2px] border transition-colors cursor-pointer ${
+                filter === 'HIGH'
+                  ? 'bg-[#D97706] text-white border-[#D97706]'
+                  : 'bg-amber-50 text-[#D97706] border-amber-200 hover:bg-amber-100'
+              }`}
+            >
+              HIGH ({countHigh})
+            </button>
+            <button
+              onClick={() => setFilter('MEDIUM')}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-[2px] border transition-colors cursor-pointer ${
+                filter === 'MEDIUM'
+                  ? 'bg-[#CA8A04] text-white border-[#CA8A04]'
+                  : 'bg-yellow-50 text-[#CA8A04] border-yellow-200 hover:bg-yellow-100'
+              }`}
+            >
+              MEDIUM ({countMedium})
+            </button>
+            <button
+              onClick={() => setFilter('LOW')}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-[2px] border transition-colors cursor-pointer ${
+                filter === 'LOW'
+                  ? 'bg-[#2F7D5D] text-white border-[#2F7D5D]'
+                  : 'bg-emerald-50 text-[#2F7D5D] border-emerald-200 hover:bg-emerald-100'
+              }`}
+            >
+              LOW ({countLow})
+            </button>
+          </div>
+
+          <div className="text-xs text-slate-500 font-mono">
+            Showing <span className="font-bold text-slate-800">{filteredQueue.length}</span> referral{filteredQueue.length === 1 ? '' : 's'}
+          </div>
         </div>
 
-        {/* Referrals Table */}
-        <div style={{ overflowX: 'auto', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-sm)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
-            <thead>
-              <tr style={{ background: 'var(--bg-subtle)', borderBottom: '1px solid var(--border-light)' }}>
-                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Time &amp; Referral ID</th>
-                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Patient Details</th>
-                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Urgency</th>
-                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Protocol / Symptoms</th>
-                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Status</th>
-                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loadingQueue ? (
-                <tr>
-                  <td colSpan={6} style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    Loading incoming referrals for this facility...
-                  </td>
-                </tr>
-              ) : filteredQueue.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    No triage referrals found for {filter !== 'ALL' ? `urgency [${filter}]` : 'this facility'}.
-                  </td>
-                </tr>
-              ) : (
-                filteredQueue.map((item) => (
-                  <tr
-                    key={item.id}
-                    style={{
-                      borderBottom: '1px solid var(--border-light)',
-                      background: selectedItem?.id === item.id ? 'var(--primary-light)' : 'transparent',
-                    }}
-                  >
-                    {/* Time & ID */}
-                    <td style={{ padding: '12px 14px' }}>
-                      <div style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '12px' }}>
-                        {item.id.slice(0, 8)}...
+        {/* Queue Error */}
+        {queueError && (
+          <div className="p-4 bg-red-50 border-l-4 border-[#C7372F] text-xs text-red-700 rounded-[2px]">
+            {queueError}
+          </div>
+        )}
+
+        {/* Dense Single-Column Referral Card List */}
+        <div className="space-y-3">
+          {loadingQueue && queue.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-[2px] p-8 text-center text-slate-400 text-xs">
+              Fetching inbound referrals for {staff.facility_name}...
+            </div>
+          ) : filteredQueue.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-[2px] p-8 text-center text-slate-500 text-xs">
+              No inbound referrals matching the selected filter.
+            </div>
+          ) : (
+            filteredQueue.map((item) => {
+              const uTheme = getUrgencyTheme(item.urgency);
+              const sBadge = getStateBadge(item.state);
+              const cosmeticAbha = `91-${item.id.replace(/\D/g, '').padEnd(10, '8').slice(0, 4)}-${item.id.replace(/\D/g, '').padEnd(10, '4').slice(4, 8)}-${item.id.replace(/\D/g, '').padEnd(10, '2').slice(8, 10)}`;
+
+              return (
+                <div
+                  key={item.id}
+                  className="bg-white border border-slate-200 rounded-[2px] shadow-sm hover:border-slate-300 transition-shadow overflow-hidden flex flex-col"
+                  style={{ borderLeftWidth: '4px', borderLeftColor: uTheme.stripe }}
+                >
+                  {/* Card Header Row */}
+                  <div className="p-3.5 sm:p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50/40">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-[2px] border"
+                        style={{
+                          backgroundColor: uTheme.bg,
+                          color: uTheme.text,
+                          borderColor: uTheme.border,
+                        }}
+                      >
+                        {uTheme.label}
+                      </span>
+                      <span
+                        className="px-2 py-0.5 text-[10px] font-bold rounded-[2px] border"
+                        style={{
+                          backgroundColor: sBadge.bg,
+                          color: sBadge.text,
+                          borderColor: sBadge.border,
+                        }}
+                      >
+                        {sBadge.label}
+                      </span>
+                      <span className="text-[11px] font-mono text-slate-500">
+                        REF #{item.id.slice(0, 8)}
+                      </span>
+                      <span className="text-[11px] font-mono text-slate-400">
+                        • ABHA: {cosmeticAbha}
+                      </span>
+                    </div>
+
+                    <div className="text-[11px] text-slate-400 font-mono">
+                      Received {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} •{' '}
+                      {new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                    </div>
+                  </div>
+
+                  {/* Card Main Body */}
+                  <div className="p-3.5 sm:p-4 grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                    {/* Patient & Demographic Info (4 cols) */}
+                    <div className="lg:col-span-4 space-y-1.5 border-b lg:border-b-0 lg:border-r border-slate-100 pb-3 lg:pb-0 lg:pr-4">
+                      <div className="flex items-baseline space-x-2">
+                        <h2 className="text-sm font-bold text-slate-900 tracking-tight">
+                          {item.patient_name || 'Citizen Patient'}
+                        </h2>
+                        <span className="text-xs text-slate-500 font-medium">
+                          ({item.patient_age_years != null ? `${item.patient_age_years}y` : '--'}, {item.patient_sex || '--'})
+                        </span>
                       </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} •{' '}
-                        {new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+
+                      <div className="text-xs text-slate-600 space-y-1">
+                        <div className="flex items-center space-x-1.5">
+                          <span className="text-slate-400 text-[11px] inline-flex items-center gap-1">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                              <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                            <span>Village:</span>
+                          </span>
+                          <span className="font-medium text-slate-700">{item.patient_village || 'Local Community'}</span>
+                        </div>
+                        <div className="flex items-center space-x-1.5">
+                          <span className="text-slate-400 text-[11px] inline-flex items-center gap-1">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                            </svg>
+                            <span>Contact:</span>
+                          </span>
+                          <span className="font-mono text-slate-700">{item.patient_phone || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center space-x-1.5">
+                          <span className="text-slate-400 text-[11px] inline-flex items-center gap-1">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                              <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                            <span>Origin:</span>
+                          </span>
+                          <span className="text-slate-700 capitalize font-medium">{item.created_by_role ? item.created_by_role.replace(/_/g, ' ') : 'Citizen App'}</span>
+                        </div>
                       </div>
-                      {item.created_by_role && (
-                        <div style={{ fontSize: '10px', color: 'var(--primary-dark)', fontWeight: 600 }}>
-                          By: {item.created_by_role.toUpperCase()}
+                    </div>
+
+                    {/* Clinical Triage Rule, Symptoms & Vitals (5 cols) */}
+                    <div className="lg:col-span-5 space-y-2 border-b lg:border-b-0 lg:border-r border-slate-100 pb-3 lg:pb-0 lg:pr-4">
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          NHM Protocol / Triage Rule
+                        </div>
+                        <div className="text-xs font-bold text-slate-800 font-mono mt-0.5">
+                          {item.rule_name || 'Standard Referral Protocol'}
+                        </div>
+                      </div>
+
+                      {item.symptoms && item.symptoms.length > 0 && (
+                        <div>
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                            Presenting Symptoms
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {item.symptoms.map((s, idx) => (
+                              <span
+                                key={idx}
+                                className="px-1.5 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-medium rounded-[2px] border border-slate-200"
+                              >
+                                {s.replace(/_/g, ' ')}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       )}
-                    </td>
 
-                    {/* Patient */}
-                    <td style={{ padding: '12px 14px' }}>
-                      <div style={{ fontWeight: 700 }}>{item.patient_name || 'Citizen Patient'}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {item.patient_age_years ? `${item.patient_age_years}y` : ''}
-                        {item.patient_sex ? ` • ${item.patient_sex.toUpperCase()}` : ''}
-                        {item.patient_village ? ` • ${item.patient_village}` : ''}
-                      </div>
-                      <div style={{ fontSize: '12px', marginTop: '2px' }}>
-                        {item.patient_phone && item.patient_phone !== 'N/A' ? (
-                          <a href={`tel:${item.patient_phone}`} style={{ color: 'var(--primary)', fontWeight: 600 }}>
-                            📞 {item.patient_phone}
-                          </a>
-                        ) : (
-                          <span style={{ color: 'var(--text-faint)' }}>No phone</span>
+                      {/* Vitals Strip */}
+                      {item.vitals && Object.keys(item.vitals).length > 0 && (
+                        <div>
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+                            Recorded Vitals
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-[11px] font-mono text-slate-700 bg-slate-50 p-1.5 rounded-[2px] border border-slate-200">
+                            {item.vitals.spo2_percent != null && (
+                              <span>SpO2: <b>{item.vitals.spo2_percent}%</b></span>
+                            )}
+                            {item.vitals.pulse_bpm != null && (
+                              <span>Pulse: <b>{item.vitals.pulse_bpm} bpm</b></span>
+                            )}
+                            {item.vitals.systolic_bp != null && item.vitals.diastolic_bp != null && (
+                              <span>BP: <b>{item.vitals.systolic_bp}/{item.vitals.diastolic_bp}</b></span>
+                            )}
+                            {item.vitals.temperature_celsius != null && (
+                              <span>Temp: <b>{item.vitals.temperature_celsius}°C</b></span>
+                            )}
+                            {item.vitals.respiratory_rate != null && (
+                              <span>RR: <b>{item.vitals.respiratory_rate}/m</b></span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {item.recommended_action && (
+                        <div className="text-xs text-slate-600 bg-amber-50/60 border border-amber-100 p-1.5 rounded-[2px]">
+                          <span className="font-semibold text-amber-900">Action:</span> {item.recommended_action}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Deterministic State-Transition & Quick Action Actions (3 cols) */}
+                    <div className="lg:col-span-3 flex flex-col justify-between h-full space-y-2">
+                      <div className="space-y-1.5">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          State Transition Action
+                        </div>
+
+                        {/* Exact ONE Primary State-Transition Button based on referral.state */}
+                        {item.state === 'created' && (
+                          <button
+                            type="button"
+                            disabled={actionLoading === item.id}
+                            onClick={() => handleAcceptReferral(item)}
+                            className="w-full py-2 px-3 bg-[#12324D] hover:bg-[#0A1E30] text-white text-xs font-bold rounded-[2px] transition-colors disabled:opacity-50 cursor-pointer text-center inline-flex items-center justify-center gap-1.5"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <line x1="5" y1="12" x2="19" y2="12"></line>
+                              <polyline points="12 5 19 12 12 19"></polyline>
+                            </svg>
+                            <span>{actionLoading === item.id ? 'Processing...' : 'Accept Referral'}</span>
+                          </button>
                         )}
-                      </div>
-                    </td>
 
-                    {/* Urgency */}
-                    <td style={{ padding: '12px 14px' }}>
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          padding: '4px 8px',
-                          borderRadius: '4px',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          background:
-                            item.urgency === 'EMERGENCY'
-                              ? 'var(--urgency-emergency-bg)'
-                              : item.urgency === 'HIGH'
-                              ? 'var(--urgency-high-bg)'
-                              : item.urgency === 'MEDIUM'
-                              ? 'var(--urgency-medium-bg)'
-                              : 'var(--urgency-low-bg)',
-                          color:
-                            item.urgency === 'EMERGENCY'
-                              ? 'var(--urgency-emergency)'
-                              : item.urgency === 'HIGH'
-                              ? 'var(--urgency-high)'
-                              : item.urgency === 'MEDIUM'
-                              ? 'var(--urgency-medium)'
-                              : 'var(--urgency-low)',
-                        }}
-                      >
-                        {item.urgency}
-                      </span>
-                    </td>
-
-                    {/* Rule / Symptoms */}
-                    <td style={{ padding: '12px 14px', maxWidth: '240px' }}>
-                      <div style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 600 }}>
-                        {item.rule_name}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        {item.symptoms.slice(0, 3).join(', ')}
-                        {item.symptoms.length > 3 ? ` +${item.symptoms.length - 3}` : ''}
-                      </div>
-                    </td>
-
-                    {/* State */}
-                    <td style={{ padding: '12px 14px' }}>
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          padding: '3px 8px',
-                          borderRadius: '10px',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          textTransform: 'capitalize',
-                          background:
-                            item.state === 'closed'
-                              ? '#e2e8f0'
-                              : item.state === 'received_at_facility'
-                              ? 'var(--primary-light)'
-                              : item.state === 'in_transit'
-                              ? '#fef08a'
-                              : '#fed7aa',
-                          color:
-                            item.state === 'closed'
-                              ? '#475569'
-                              : item.state === 'received_at_facility'
-                              ? 'var(--primary-darker)'
-                              : item.state === 'in_transit'
-                              ? '#854d0e'
-                              : '#9a3412',
-                        }}
-                      >
-                        {item.state.replace(/_/g, ' ')}
-                      </span>
-                    </td>
-
-                    {/* Actions */}
-                    <td style={{ padding: '12px 14px' }}>
-                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                        {/* Transition Action 1: Mark Received */}
                         {item.state === 'in_transit' && (
                           <button
                             type="button"
-                            className="btn-primary"
                             disabled={actionLoading === item.id}
-                            style={{
-                              padding: '5px 10px',
-                              fontSize: '11px',
-                              minHeight: 'auto',
-                              background: 'var(--primary)',
-                            }}
                             onClick={() => handleMarkReceived(item)}
+                            className="w-full py-2 px-3 bg-[#12324D] hover:bg-[#0A1E30] text-white text-xs font-bold rounded-[2px] transition-colors disabled:opacity-50 cursor-pointer text-center inline-flex items-center justify-center gap-1.5"
                           >
-                            {actionLoading === item.id ? 'Updating...' : '📥 Mark Received'}
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <polyline points="9 11 12 14 22 4"></polyline>
+                              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                            </svg>
+                            <span>{actionLoading === item.id ? 'Processing...' : 'Mark Received at Facility'}</span>
                           </button>
                         )}
 
-                        {/* Transition Action 2: Close Referral */}
                         {item.state === 'received_at_facility' && (
                           <button
                             type="button"
-                            className="btn-primary"
                             disabled={actionLoading === item.id}
-                            style={{
-                              padding: '5px 10px',
-                              fontSize: '11px',
-                              minHeight: 'auto',
-                              background: '#16a34a',
-                              borderColor: '#16a34a',
-                            }}
                             onClick={() => handleCloseReferral(item)}
+                            className="w-full py-2 px-3 bg-[#16a34a] hover:bg-[#15803d] text-white text-xs font-bold rounded-[2px] transition-colors disabled:opacity-50 cursor-pointer text-center inline-flex items-center justify-center gap-1.5"
                           >
-                            {actionLoading === item.id ? 'Updating...' : '✅ Close Referral'}
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            <span>{actionLoading === item.id ? 'Processing...' : 'Close Referral'}</span>
                           </button>
                         )}
 
-                        {item.state === 'created' && (
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                            Awaiting Transit
-                          </span>
-                        )}
-
                         {item.state === 'closed' && (
-                          <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 600 }}>
-                            ✓ Closed
-                          </span>
+                          <div className="w-full py-2 px-3 bg-slate-100 text-slate-600 text-xs font-bold rounded-[2px] border border-slate-200 text-center inline-flex items-center justify-center gap-1.5">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            <span>Referral Completed</span>
+                          </div>
                         )}
+                      </div>
 
+                      {/* Auxiliary Non-State Actions */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center gap-1.5">
+                        {item.patient_phone && (
+                          <a
+                            href={`tel:${item.patient_phone}`}
+                            className="flex-1 py-1 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold rounded-[2px] border border-slate-300 text-center transition-colors inline-flex items-center justify-center gap-1"
+                          >
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                            </svg>
+                            <span>Call</span>
+                          </a>
+                        )}
                         <button
                           type="button"
-                          className="btn-secondary"
-                          style={{ padding: '5px 8px', fontSize: '11px', minHeight: 'auto' }}
                           onClick={() => setSelectedItem(item)}
+                          className="flex-1 py-1 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold rounded-[2px] border border-slate-300 text-center transition-colors cursor-pointer inline-flex items-center justify-center gap-1"
                         >
-                          FHIR
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                          </svg>
+                          <span>FHIR R4</span>
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
 
         {/* FHIR Details Drawer / Modal */}
         {selectedItem && (
-          <div
-            style={{
-              marginTop: '24px',
-              padding: '16px',
-              background: 'var(--bg-subtle)',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-light)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 700 }}>
-                FHIR R4 Referral Bundle: {selectedItem.id} ({selectedItem.patient_name})
-              </h3>
-              <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="bg-slate-900 text-slate-100 border border-slate-800 rounded-[2px] p-4 sm:p-5 shadow-lg space-y-3 mt-6">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-white tracking-tight">
+                  FHIR R4 Referral Bundle • {selectedItem.id}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Patient: {selectedItem.patient_name} • Urgency: {selectedItem.urgency}
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
                 <button
                   type="button"
-                  className="btn-secondary"
-                  style={{ padding: '4px 10px', fontSize: '12px', minHeight: 'auto' }}
                   onClick={() => handleCopyFhir(selectedItem)}
+                  className="px-3 py-1 bg-[#1E4E75] hover:bg-[#256291] text-white text-xs font-semibold rounded-[2px] cursor-pointer inline-flex items-center gap-1.5"
                 >
-                  {copied ? '✓ Copied JSON' : '📋 Copy FHIR JSON'}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    {copied ? (
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    ) : (
+                      <>
+                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                      </>
+                    )}
+                  </svg>
+                  <span>{copied ? 'Copied Bundle' : 'Copy FHIR JSON'}</span>
                 </button>
                 <button
                   type="button"
-                  className="btn-secondary"
-                  style={{ padding: '4px 10px', fontSize: '12px', minHeight: 'auto' }}
                   onClick={() => setSelectedItem(null)}
+                  className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-[2px] cursor-pointer"
                 >
                   Close
                 </button>
               </div>
             </div>
 
-            <pre
-              style={{
-                fontSize: '12px',
-                background: '#0f172a',
-                color: '#e2e8f0',
-                padding: '12px',
-                borderRadius: '6px',
-                overflowX: 'auto',
-              }}
-            >
+            <pre className="text-xs font-mono bg-slate-950 p-3 rounded-[2px] overflow-x-auto text-emerald-400 leading-relaxed max-h-72">
               {JSON.stringify(
                 {
                   resourceType: 'Bundle',
@@ -1647,9 +1564,17 @@ export default function FacilityDashboard() {
         )}
       </div>
 
-      <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '13px', color: 'var(--text-muted)' }}>
-        <Link href="/" style={{ fontWeight: 600 }}>← Back to Citizen Triage</Link> • Swasthya Setu © {currentYear}
-      </div>
+      {/* Footer Navigation */}
+      <footer className="border-t border-slate-200 bg-white py-4 px-4 sm:px-6 mt-8">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
+          <div>
+            <Link href="/" className="font-semibold text-slate-700 hover:underline">
+              ← Return to Citizen Self-Triage
+            </Link>
+          </div>
+          <div>Jeevanya • MoHFW NHM Standardized Facility Portal © {new Date().getFullYear()}</div>
+        </div>
+      </footer>
     </main>
   );
 }
