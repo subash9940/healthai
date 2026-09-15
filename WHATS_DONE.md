@@ -1,6 +1,6 @@
-# Swasthya Setu (स्वास्थ्य सेतु) — What's Built & Verified
+# Jeevanya (जीवन्या) — What's Built & Verified
 
-> **"Health Bridge"** — AI-augmented medical triage and referral system for rural India.
+> **"Jeevanya" (जीवन्या)** — AI-augmented medical triage and referral system for rural India.
 > Citizens, ASHA workers, and facility staff get guideline-backed urgency assessments in their own language, with zero dependency on internet for the core triage logic and verifiable server-side referral tracking.
 
 ---
@@ -236,3 +236,45 @@ The clinical decision matrix spans **45+ triage rules** adhering strictly to off
   - `citizen_web`: `npx tsc --noEmit` ➔ **0 errors**.
   - `asha_app`: `npx tsc --noEmit` ➔ **0 errors**.
 - **Three-Way Engine Parity**: Verified 100% identical rule traces and urgency classifications across Python backend, Next.js web client, and React Native mobile app.
+
+---
+
+## 7. Platform Refinements, Accessibility & Branding Updates
+
+### 7.1 PostgreSQL Database Migration (`jeevanya`)
+- **Database Renamed**: Migrated database from `swasthya_setu` to `jeevanya` via `ALTER DATABASE` in PostgreSQL with pre-migration SQL dumps.
+- **Environment & Configuration Updated**: Updated `DATABASE_URL` in `.env.example`, connection strings, and code documentation in `app/db.py` to point to `postgresql://postgres:postgres@localhost:5432/jeevanya`.
+- **Integrity Verified**: Validated table row counts, relational constraints, foreign keys, and indexes across `patients`, `triage_records`, `facilities`, `facility_staff`, and `referrals`.
+
+### 7.2 Multi-Platform Display & Branding Update (Jeevanya / जीवन्या)
+- **Web (`citizen_web/`)**: Updated `package.json`, metadata titles, privacy policy (`privacy/page.tsx`), `robots.ts`, `sitemap.ts`, and security test scripts.
+- **Mobile (`asha_app/`)**: Updated `app.json` (name, slug, scheme), `package.json`, and root branding in `App.tsx`.
+- **Backend & Documentation**: Updated root FastAPI docstrings (`app/main.py`), symptom vocabulary metadata, test suites, and documentation headers.
+
+### 7.3 Mobile Touch Target & Back Button Standardization
+- **Standardized to `TouchButton`**: Refactored all raw/undersized `TouchableOpacity` back links (such as in `FacilityAvailabilityScreen.tsx`) to use the standard `TouchButton` component (`variant="secondary"`).
+- **Accessibility Compliance**: Meets WCAG 2.5.5 AAA / 2.5.8 target sizes (52–56dp height and min 44x44px bounding area) with high-contrast text and border styling for field workers in bright sunlight or using one hand.
+
+### 7.4 Virtual Keyboard Tap Swallowing Fix (`keyboardShouldPersistTaps="handled"`)
+- **Audit & Implementation**: Added `keyboardShouldPersistTaps="handled"` across all `ScrollView` containers in `asha_app/src/screens/`:
+  - `AuthScreen.tsx` (Sign in / register forms and worker chips scroll)
+  - `PatientDemographicsScreen.tsx` (Patient registration form)
+  - `SymptomCheckScreen.tsx` (Symptom selector list)
+  - `VitalsScreen.tsx` (Vitals input form)
+  - `TriageResultScreen.tsx` (Result and action button container)
+  - `DashboardScreen.tsx` (ASHA main dashboard scroll)
+  - `ReferralQueueScreen.tsx` (Referral filter chips and cards list)
+  - `PatientHistoryScreen.tsx` (Offline patient history registry)
+  - `FacilityAvailabilityScreen.tsx` (Facility level filter chips and cards list)
+- **User Experience**: Ensures immediate button press recognition (first-tap responsiveness) when the onscreen soft keyboard is open, preventing lost taps during rapid field assessments.
+
+### 7.5 Comprehensive Automated Verification (`test_all_features.ts`)
+- **68/68 Automated Tests Passing**:
+  1. Multi-language dictionary parity across English, Hindi, Tamil, and Marathi.
+  2. Symptom catalog translation completeness (32 standard clinical symptoms).
+  3. Form validation rules (10-digit Indian mobile numbers, age range 0–120).
+  4. Clinical rules engine evaluation (IMNCI peds convulsions, adult chest pain, maternal eclampsia, adult yellow medical signs, low urgency cold/cough, honest fallback).
+  5. Multilingual citizen advice slip generation across all 4 languages.
+  6. Vitals warning triggers (fever ≥ 37.5°C, high BP ≥ 140/90, low SpO2 < 90%).
+  7. Live HTTP API endpoint verification against Next.js production server (`POST /api/triage`).
+
