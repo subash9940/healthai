@@ -1,5 +1,5 @@
 """
-db.py — asyncpg connection pool for Swasthya Setu.
+db.py — asyncpg connection pool for Jeevanya.
 
 Matches the connection pattern already proven in verify_db.py.
 Wire this into FastAPI via lifespan (see wiring_example.py).
@@ -10,7 +10,7 @@ import asyncpg
 from typing import Optional
 
 # Expected in your .env, already wired per your last session:
-#   DATABASE_URL=postgresql://subash:<password>@localhost:5432/swasthya_setu
+#   DATABASE_URL=postgresql://subash:<password>@localhost:5432/jeevanya
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 # asyncpg needs plain postgresql://, not postgresql+asyncpg://
