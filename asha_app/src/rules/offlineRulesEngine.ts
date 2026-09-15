@@ -188,7 +188,7 @@ function hasMajorAdultBurn(r: TriageEvaluationRequest): boolean {
 function hasLowFeverUnder101f(r: TriageEvaluationRequest): boolean {
   if (r.symptoms.includes("fever_under_101f")) return true;
   if (r.vitals && r.vitals.temperature_celsius != null) {
-    return r.vitals.temperature_celsius >= 37.5 && r.vitals.temperature_celsius < 38.3;
+    return r.vitals.temperature_celsius < 38.3;
   }
   return false;
 }
