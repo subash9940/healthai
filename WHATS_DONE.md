@@ -105,6 +105,14 @@ The clinical decision matrix spans **45+ triage rules** adhering strictly to off
   - *Duration Unreported*: Visit PHC for diagnostic evaluation (blood smear/RDT).
 - **100% Three-Way Parity**: Synchronized logic and tests across Python (`rules_engine.py`), Next.js (`localRulesEngine.ts`), and React Native (`offlineRulesEngine.ts`).
 
+### 1.3 Headache Triage Protocol & Red Flag Triaging
+- **Clinical Alignment**: Bare headache alone without danger signs is classified as **LOW (GREEN)** (`R-ADULT-LOW-001` / `R-LOW-001`) with hydration, rest, and paracetamol advice.
+- **Compound Red Flags (HIGH / EMERGENCY)**:
+  - Headache with fever / high temperature: routes to HIGH (`R-HIGH-003`) or EMERGENCY when signs of meningitis/encephalitis are present.
+  - Severe headache in pregnancy/postpartum: routes to EMERGENCY (`R-MAT-001` / `R-MAT-002`) for preeclampsia/eclampsia risk.
+  - Headache with dengue warning signs (retro-orbital pain, bleeding, persistent vomiting): routes to HIGH (`R-DENGUE-001`).
+- **Parity Across 3 Engines**: Identical classification logic confirmed across `app/services/rules_engine.py`, `citizen_web/src/lib/localRulesEngine.ts`, and `asha_app/src/rules/offlineRulesEngine.ts`.
+
 ---
 
 ## 2. Database Migrations & Persistence
@@ -152,6 +160,14 @@ The clinical decision matrix spans **45+ triage rules** adhering strictly to off
   - Live status control matrix (`AVAILABLE` 🟢, `BUSY` 🟡, `EMERGENCY_ONLY` 🟠, `FULL` 🔴).
   - Dynamic bed counter and public broadcast notes for frontline field workers.
 
+### 3.3 Demo Facility Staff Accounts & Automated Seed Tool (`scripts/seed_demo_staff.py`)
+- **Seeded Demo Accounts**:
+  1. **Dr. Sharma** (Role: `phc_staff`, Phone: `9876543210`, MPIN: `1234`, Facility: `PHC Shirur`)
+  2. **Sister Anita** (Role: `phc_staff`, Phone: `9876543211`, MPIN: `1234`, Facility: `PHC Shirur`)
+  3. **Admin Patil** (Role: `supervisor`, Phone: `9876543212`, MPIN: `1234`, Facility: `PHC Shirur`)
+- **Quick-Login Presets**: Matches the 3 preset quick-login buttons on `citizen_web/src/app/facility/page.tsx` for one-click testing and demonstration.
+- **Idempotent Automated Seeding**: Runs facility lookup/insertion, bcrypt MPIN hashing, upsertion against PostgreSQL `facility_staff` with role constraints, and executes an automated ASGI integration test verifying that all 3 accounts can log in via `POST /facility/login` and receive valid JWT access tokens.
+
 ---
 
 ## 4. Frontline ASHA Mobile Application (`asha_app/`)
@@ -171,11 +187,15 @@ The clinical decision matrix spans **45+ triage rules** adhering strictly to off
 - **Demographics & Profile**: Rapid patient profile entry (name, age, sex, village, pregnancy/postpartum status).
 - **Symptom & Duration Checklist (`SymptomCheckScreen.tsx`)**:
   - High-contrast danger sign cards (56dp+ touch targets).
+  - Standardized symptom picker with vocabulary parity (including `cold`, `cough`, `fever`, `headache`, `chest_pain`, `breathlessness`, `vomiting`, `diarrhea`, `abdominal_pain`).
   - Segmented ICMR duration selector (`0`, `2`, `4`, `6`, `10` days) with full 4-language i18n (`en`, `hi`, `mr`, `ta`).
 - **Offline Triage Calculation (`offlineRulesEngine.ts`)**: Instant 0ms offline rule evaluations returning duration-staged guidance and emergency dispatch flags.
 - **Vitals & Triage Result (`ResultScreen.tsx`)**: Displays urgency badges, facility targets, and duration-tailored action guidance.
 - **Emergency 1-Touch Quick Dispatch**: Direct integration for calling **108 Emergency Ambulance** and **102 Janani Express** maternal transport.
-- **Active Referral Transfers Deck**: Live tracking across referral lifecycle states with SQLite storage and background sync outbox.
+
+### 4.3 Read-Only Frontline Referral Tracking (`ReferralQueueScreen.tsx`)
+- **Strict Role Separation**: Frontline ASHA workers can track patient referral statuses (`created`, `in_transit`, `received_at_facility`, `closed`) created during field screening.
+- **State Machine Ownership**: Mutation triggers (`in_transit`, `received_at_facility`, `closed`) have been removed from the mobile client, ensuring state transitions are strictly executed by authenticated medical officers and facility staff via the Facility Web Portal (`/facility`).
 
 ---
 
@@ -185,7 +205,7 @@ The clinical decision matrix spans **45+ triage rules** adhering strictly to off
 - **Zero-Authentication Citizen Guarantee**: The public citizen triage flow (`/`) requires **no login, no OTP, and no password**, ensuring zero friction for rural and low-literacy patients.
 - **Step 1 (Demographics - `StepDemographics.tsx`)**: Collects patient name, age, sex, phone number, village, and ABHA ID.
 - **Step 2 (Symptoms & Story - `StepSymptoms.tsx`)**:
-  - Multilingual symptom checkboxes and voice narration transcript.
+  - Multilingual symptom checkboxes (including `cold`, `fever`, `cough`, `headache`, `chest_pain`, `breathlessness`, `vomiting`, `diarrhea`, `abdominal_pain`, etc.) and voice narration transcript.
   - Low-literacy segmented duration selector (Today ➔ 0d, 1-2d ➔ 2d, 3-4d ➔ 4d, 5-7d ➔ 6d, >1 week ➔ 10d).
 - **Step 3 (Vitals - `StepVitals.tsx`)**: Optional temperature and vital signs entry with hyperpyrexia alerts.
 - **Step 4 (Referral Slip - `TriageResult.tsx`)**:
@@ -196,13 +216,23 @@ The clinical decision matrix spans **45+ triage rules** adhering strictly to off
 
 ## 6. Verification & Test Status
 
+- **Facility Staff Auth & Isolation Test Suite (`tests/test_facility_auth_and_isolation.py`)**: **4/4 test suites PASSING (25+ sub-assertions)**.
+  - Login authentication & JWT issuance with valid/invalid MPIN credentials.
+  - Scoped referral listing isolation (facility A cannot view facility B referrals).
+  - Referral state machine progression (`in_transit` ➔ `received_at_facility` ➔ `closed`).
+  - Cross-facility mutation rejection (HTTP 403 Forbidden).
+  - Facility operational status and bed capacity updates.
+- **Demo Staff Seeding Suite (`python3 scripts/seed_demo_staff.py`)**:
+  - Database upsertion of Dr. Sharma, Sister Anita, and Admin Patil.
+  - Automated verification of POST `/facility/login` with MPIN `1234` for each account.
 - **Python Rules Engine Smoke Suite (`python3 -m app.services.rules_engine`)**: **12/12 test cases PASSING**.
   - Verified measured mild fever (37.9°C) falls through to `R-ADULT-LOW-001` (GREEN).
   - Verified measured high fever (38.6°C, Day 1) triggers `R-MED-FEVER-001` with Day 1–2 advice.
   - Verified unmeasured fever (Day 6) triggers `R-MED-FEVER-001` with >5 days blood culture advice.
+  - Verified bare headache without danger signs routes to `R-ADULT-LOW-001` (GREEN).
+  - Verified headache + fever routes to `R-HIGH-003` (HIGH).
   - Verified adult minor cough/cold with normal vitals triggers `R-ADULT-LOW-001` / `R-LOW-001` (GREEN).
 - **TypeScript Compilation**:
   - `citizen_web`: `npx tsc --noEmit` ➔ **0 errors**.
   - `asha_app`: `npx tsc --noEmit` ➔ **0 errors**.
 - **Three-Way Engine Parity**: Verified 100% identical rule traces and urgency classifications across Python backend, Next.js web client, and React Native mobile app.
-claude --resume b261e439-93d2-45b9-b00b-eddc70a5d88a
