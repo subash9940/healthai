@@ -347,6 +347,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {/* Sub-language Switcher */}
           {onLanguageChange && (
@@ -437,7 +438,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 {/* Authorized Worker Quick Selector */}
                 <View style={styles.selectorSection}>
                   <Text style={styles.sectionLabel}>{t.auth_switch_worker || "Select Authorized Worker:"}</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    style={styles.chipsScroll}
+                  >
                     {workerList.map((w) => {
                       const isSelected = workerId.toUpperCase() === w.worker_id.toUpperCase();
                       const roleBadge = w.role === "admin" ? "MO" : w.role === "supervisor" ? "SUP" : "ASHA";

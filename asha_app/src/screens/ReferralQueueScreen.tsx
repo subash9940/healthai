@@ -77,7 +77,11 @@ export const ReferralQueueScreen: React.FC<ReferralQueueScreenProps> = ({
     <View style={styles.container}>
       {/* Top Filter Bar */}
       <View style={styles.filterBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {(
             [
               { id: "all", label: t.filter_all },
@@ -112,6 +116,7 @@ export const ReferralQueueScreen: React.FC<ReferralQueueScreenProps> = ({
       {/* Referral List */}
       <ScrollView
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {filteredList.length === 0 ? (

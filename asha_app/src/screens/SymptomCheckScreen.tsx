@@ -78,7 +78,7 @@ export const SymptomCheckScreen: React.FC<SymptomCheckScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>{t.symptom_title}</Text>

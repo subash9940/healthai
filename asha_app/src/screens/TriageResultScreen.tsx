@@ -167,7 +167,11 @@ export const TriageResultScreen: React.FC<TriageResultScreenProps> = ({
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
       {/* Patient Summary Header */}
       <View style={styles.patientBadge}>
         <Text style={styles.patientName}>{demographics.patient_display_name}</Text>

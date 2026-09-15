@@ -233,6 +233,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       {/* 1. Worker Profile & 108 Emergency Bar */}

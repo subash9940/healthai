@@ -175,13 +175,13 @@ const resMaternalEmergency = evaluateTriage({
 assert(resMaternalEmergency.urgency === "emergency", "Pregnant convulsions -> EMERGENCY (Eclampsia)");
 assert(resMaternalEmergency.rule_trace.includes("R-EMG-007"), "Trace includes R-EMG-007 (Pregnancy Emergency Signs)");
 
-// Test Case 4: High Urgency (Adult Yellow Medical)
+// Test Case 4: High Urgency (Adult Yellow Medical: persistent vomiting)
 const resHigh = evaluateTriage({
-  symptoms: ["headache_or_dizziness"],
+  symptoms: ["persistent_vomiting"],
   patient_age_years: 30,
   patient_sex: "male",
 });
-assert(resHigh.urgency === "high", "Headache or dizziness -> HIGH");
+assert(resHigh.urgency === "high", "Adult persistent vomiting -> HIGH");
 assert(resHigh.rule_trace.includes("R-ADULT-HIGH-001"), "Trace includes R-ADULT-HIGH-001");
 
 // Test Case 5: Low Urgency (Mild cough without danger signs)

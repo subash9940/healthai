@@ -69,7 +69,7 @@ export const VitalsScreen: React.FC<VitalsScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.title}>{t.vitals_title}</Text>
           <Text style={styles.subtitle}>{t.vitals_subtitle}</Text>
