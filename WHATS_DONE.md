@@ -54,14 +54,9 @@
 │                                        └─────────────────────┘  │
 │                                                                  │
 │  GET  /facility/list ──→ Public Facility Directory (for Sign Up) │
-│  GET  /facility/availability ──→ Public Facility Availability    │
 │  POST /facility/register ──→ Persists Staff + Bcrypt + Scoped JWT│
-│  POST /facility/login ──→ Scoped Session JWT (Brute-force guarded)
-│  GET  /facility/referrals ──→ Scoped Referral Queue (by facility)│
-│  GET  /facility/referrals/unassigned ──→ Unassigned Global Queue │
-│  POST /facility/referrals/{id}/accept ──→ Accept Referral (Lock) │
-│  POST /facility/referrals/{id}/receive ──→ Mark Received at PHC  │
-│  POST /facility/referrals/{id}/close ──→ Close / Discharge       │
+│  POST /facility/login ──→ Scoped Session JWT (staff_id, facility)│
+│  POST /facility/referrals/{id}/transition ──→ State Machine Check│
 │  POST /extract-symptoms ──→ LLM (local proxy) ──→ NLP Fallback   │
 └──────────────────────────────────────────────────────────────────┘
                         ▲
@@ -136,17 +131,12 @@ The clinical decision matrix spans **45+ triage rules** adhering strictly to off
 
 ### 3.1 Backend Endpoints (`app/facility_routes.py`, `app/schemas/facility.py`, `app/main.py`)
 - `GET /facility/list`: Public directory endpoint returning facility id, name, level, and district for staff registration selection.
-- `GET /facility/availability`: Public live availability feed for all healthcare facilities (beds, operational status, broadcast notes). Zero auth required.
 - `POST /facility/register`: Registers new medical officers and facility staff with bcrypt MPIN hashing, persists them to `facility_staff`, and issues a facility-scoped JWT token.
-- `POST /facility/login`: Authenticates staff via phone/username + 4-digit MPIN, issuing a scoped JWT session carrying `staff_id`, `facility_id`, and `role`. Hardened with in-memory brute-force protection (locks out for 60 seconds after 5 consecutive failed attempts).
-- `GET /facility/referrals`: Queries incoming referrals strictly filtered server-side by the authenticated staff member's `session.facility_id`.
-- `GET /facility/referrals/unassigned` *(NEW)*: Queries unassigned referrals across the system (`facility_id IS NULL AND state = 'created'`), ordered by `created_at ASC` (oldest first), authenticated via `get_current_facility_staff`.
-- `POST /facility/referrals/{referral_id}/accept` *(NEW)*: Atomically assigns `facility_id = current_staff.facility_id` and transitions state from `created` ➔ `in_transit` using PostgreSQL `SELECT ... FOR UPDATE` row locking. Logs an audit row in `referral_state_transitions`.
-- `POST /facility/referrals/{referral_id}/receive`: Advances referral state from `in_transit` ➔ `received_at_facility` with `FOR UPDATE` row lock, ensuring only assigned facility staff can receive it. Logs audit transition.
-- `POST /facility/referrals/{referral_id}/close`: Completes referral state from `received_at_facility` ➔ `closed` with optional outcome notes. Logs audit transition.
-- `GET /facility/status` & `PATCH /facility/status`: Authenticated facility capacity controls (`available_beds`, `operational_status`, `status_note`).
-
-> **Frontend Integration Note**: `asha_app` and `citizen_web` referral-queue UIs do not yet call `GET /facility/referrals/unassigned` or `POST /facility/referrals/{id}/accept`. The ASHA app's existing "Mark In-Transit" button in `ReferralQueueScreen.tsx` is local-only (`AsyncStorage` via `StorageService.updateReferralStatus`) and does not call this backend endpoint or assign `facility_id`. Rewiring the mobile button or building a facility-side acceptance triage screen is a frontend follow-up task.
+- `POST /facility/login`: Authenticates staff via phone/username + 4-digit MPIN, issuing a scoped JWT session carrying `staff_id`, `facility_id`, and `role`.
+- `GET /facility/referrals`: Queries incoming referrals strictly filtered server-side by the authenticated user's `session.facility_id`.
+- `POST /facility/referrals/{id}/transition`: Validates and advances referral states (`created` ➔ `in_transit` ➔ `received_at_facility` ➔ `closed`).
+  - **Server-Side Security**: Enforces strict `facility_id` matching, rejecting cross-facility mutations with HTTP 403 Forbidden.
+  - **Audit Logging**: Logs each transition with `updated_by_staff_id`, `from_state`, `to_state`, and timestamp in `referral_state_transitions`.
 
 ### 3.2 Facility Web Dashboard (`citizen_web/src/app/facility/page.tsx`)
 - **Dual Flow (Sign In vs Register / Sign Up)**:
@@ -215,3 +205,4 @@ The clinical decision matrix spans **45+ triage rules** adhering strictly to off
   - `citizen_web`: `npx tsc --noEmit` ➔ **0 errors**.
   - `asha_app`: `npx tsc --noEmit` ➔ **0 errors**.
 - **Three-Way Engine Parity**: Verified 100% identical rule traces and urgency classifications across Python backend, Next.js web client, and React Native mobile app.
+claude --resume b261e439-93d2-45b9-b00b-eddc70a5d88a

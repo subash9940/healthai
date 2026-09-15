@@ -2,8 +2,8 @@ import { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Swasthya Setu (स्वास्थ्य सेतु) Rural Health Triage',
-    short_name: 'Swasthya Setu',
+    name: 'Jeevanya (जीवन्या) Rural Health Triage',
+    short_name: 'Jeevanya',
     description: 'Offline-first rural primary healthcare clinical decision support and triage referral system.',
     start_url: '/',
     display: 'standalone',

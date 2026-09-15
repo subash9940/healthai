@@ -2,7 +2,7 @@
  * src/services/syncService.ts
  *
  * Background & On-Demand Synchronization Service.
- * Transmits local Outbox records to Swasthya Setu FastAPI backend.
+ * Transmits local Outbox records to Jeevanya FastAPI backend.
  * Gracefully handles offline / airplane mode with zero crash rate.
  */
 

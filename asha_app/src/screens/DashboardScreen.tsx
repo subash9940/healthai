@@ -25,6 +25,7 @@ import {
   Linking,
   ActivityIndicator,
 } from "react-native";
+import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { THEME } from "../constants/theme";
 import { TRANSLATIONS } from "../constants/translations";
 import { Language, AshaWorkerSession, ReferralRecord, SecurityAuditLog } from "../types";
@@ -262,7 +263,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             onPress={() => handleCallEmergency("108")}
             activeOpacity={0.8}
           >
-            <Text style={styles.call108Icon}>📞</Text>
+            <Ionicons name="call" size={18} color="#B91C1C" />
             <View style={{ marginLeft: 8 }}>
               <Text style={styles.call108Title}>108 Emergency Ambulance</Text>
               <Text style={styles.call108Sub}>Toll-Free Direct Dispatch</Text>
@@ -274,7 +275,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             onPress={() => handleCallEmergency("102")}
             activeOpacity={0.8}
           >
-            <Text style={styles.call102Icon}>🚑</Text>
+            <MaterialCommunityIcons name="ambulance" size={18} color="#92400E" />
             <View style={{ marginLeft: 6 }}>
               <Text style={styles.call102Title}>102 Janani Express</Text>
               <Text style={styles.call102Sub}>Maternal Transport</Text>
@@ -334,9 +335,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           {isTestingSync ? (
             <ActivityIndicator size="small" color="#0F766E" />
           ) : (
-            <Text style={styles.testSyncBtnText}>
-              ⚡ {t.telemetry_test_btn || "Test Sync Connection"}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <MaterialCommunityIcons name="lightning-bolt" size={16} color="#0F766E" style={{ marginRight: 4 }} />
+              <Text style={styles.testSyncBtnText}>
+                {t.telemetry_test_btn || "Test Sync Connection"}
+              </Text>
+            </View>
           )}
         </TouchableOpacity>
       </View>
@@ -348,7 +352,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         activeOpacity={0.85}
       >
         <View style={styles.screeningBtnContent}>
-          <Text style={styles.screeningBtnIcon}>🩺</Text>
+          <View style={styles.screeningBtnIconCircle}>
+            <MaterialCommunityIcons name="stethoscope" size={24} color="#0F766E" />
+          </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.screeningBtnTitle}>
               {t.dash_btn_start || "Start New Patient Screening"}
@@ -357,7 +363,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               Full clinical triage: IMNCI, Maternal Module 6/7 & Adult Fast-Track
             </Text>
           </View>
-          <Text style={styles.screeningArrow}>→</Text>
+          <Ionicons name="arrow-forward" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
         </View>
       </TouchableOpacity>
 
@@ -369,7 +375,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       >
         <View style={styles.facilityLauncherContent}>
           <View style={styles.facilityIconCircle}>
-            <Text style={styles.facilityIconText}>🏥</Text>
+            <MaterialCommunityIcons name="hospital-building" size={22} color="#0284C7" />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <View style={styles.facilityLauncherTitleRow}>
@@ -385,7 +391,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               {t.facilities_nav_desc || "Check real-time PHC, CHC & SDH bed capacity before referral"}
             </Text>
           </View>
-          <Text style={styles.facilityLauncherArrow}>→</Text>
+          <Ionicons name="arrow-forward" size={20} color="#0284C7" />
         </View>
       </TouchableOpacity>
 
@@ -487,7 +493,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     onPress={() => handleUpdateStatus(ref.referral_id, "in_transit")}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.actionBtnTransitText}>🚑 Dispatch 108 (Mark In-Transit)</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <MaterialCommunityIcons name="ambulance" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <Text style={styles.actionBtnTransitText}>Dispatch 108 (Mark In-Transit)</Text>
+                    </View>
                   </TouchableOpacity>
                 )}
 
@@ -497,7 +506,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     onPress={() => handleUpdateStatus(ref.referral_id, "received_at_facility")}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.actionBtnReceiveText}>🏥 Mark Admitted at PHC</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <MaterialCommunityIcons name="hospital-building" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <Text style={styles.actionBtnReceiveText}>Mark Admitted at PHC</Text>
+                    </View>
                   </TouchableOpacity>
                 )}
 
@@ -507,13 +519,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     onPress={() => handleUpdateStatus(ref.referral_id, "closed")}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.actionBtnCloseText}>✓ Discharge / Close Case</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <Text style={styles.actionBtnCloseText}>Discharge / Close Case</Text>
+                    </View>
                   </TouchableOpacity>
                 )}
 
                 {ref.status === "closed" && (
                   <View style={styles.caseClosedBadge}>
-                    <Text style={styles.caseClosedText}>✓ Treatment completed at facility</Text>
+                    <Ionicons name="checkmark-done" size={14} color="#16A34A" style={{ marginRight: 4 }} />
+                    <Text style={styles.caseClosedText}>Treatment completed at facility</Text>
                   </View>
                 )}
               </View>
@@ -841,8 +857,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  screeningBtnIcon: {
-    fontSize: 26,
+  screeningBtnIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
   },
   screeningBtnTitle: {
     fontSize: 16,

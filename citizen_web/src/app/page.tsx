@@ -246,7 +246,19 @@ export default function HomePage() {
           role="alert"
           aria-live="polite"
         >
-          <span>{statusMessage.type === 'success' ? '✓' : '⚠️'}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+            {statusMessage.type === 'success' ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+            )}
+          </span>
           <span>{statusMessage.text}</span>
           <button
             type="button"
@@ -272,8 +284,14 @@ export default function HomePage() {
               className="btn-secondary"
               onClick={handleReset}
               aria-label="Start a new triage assessment"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
-              🔄 Start New Triage
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <polyline points="23 20 23 14 17 14"></polyline>
+                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path>
+              </svg>
+              <span>Start New Triage</span>
             </button>
           )}
         </div>
@@ -414,7 +432,7 @@ export default function HomePage() {
       {/* Footer Navigation */}
       <footer className="footer-bar">
         <div style={{ marginBottom: '8px' }}>
-          <strong>Swasthya Setu</strong> — National Health Mission Digital Triage Platform
+          <strong>Jeevanya</strong> — National Health Mission Digital Triage Platform
         </div>
         <div className="footer-links">
           <Link href="/privacy">Privacy Policy</Link>

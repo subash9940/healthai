@@ -34,7 +34,7 @@ export default function Header() {
           <Link
             href="/"
             style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}
-            aria-label="Swasthya Setu — Return to Homepage"
+            aria-label="Jeevanya — Return to Homepage"
             onClick={() => setMobileMenuOpen(false)}
           >
             <div
@@ -47,16 +47,17 @@ export default function Header() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#fff',
-                fontSize: '18px',
-                fontWeight: 800,
                 flexShrink: 0,
+                boxShadow: '0 1px 3px rgba(15, 118, 110, 0.25)',
               }}
               aria-hidden="true"
             >
-              +
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+              </svg>
             </div>
             <div>
-              <div className="brand-title">{t('header.brand') !== 'header.brand' ? t('header.brand') : 'Swasthya Setu'}</div>
+              <div className="brand-title">{t('header.brand') !== 'header.brand' ? t('header.brand') : 'Jeevanya'}</div>
               <div className="brand-subtitle">{t('header.tagline') !== 'header.tagline' ? t('header.tagline') : 'Clinical Health Triage & Referral'}</div>
             </div>
           </Link>

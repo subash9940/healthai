@@ -385,7 +385,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   ? (t.auth_title || "ASHA Portal Login")
                   : "ASHA Worker Registration"}
               </Text>
-              <Text style={styles.subtitle}>{t.app_title || "Swasthya Setu Clinical Triage"}</Text>
+              <Text style={styles.subtitle}>{t.app_title || "Jeevanya Clinical Triage"}</Text>
             </View>
 
             {/* Action Switcher: Sign In vs Register */}

@@ -1,5 +1,5 @@
 {
-  "appName": "Swasthya Setu",
+  "appName": "Jeevanya",
   "appSubtitle": "Check symptoms and find out where to get care in rural Maharashtra",
   "govtDept": "Public Health Department, Government of Maharashtra",
   "guidelinesTag": "Based on verified clinical guidelines from NHM and MoHFW",
@@ -233,7 +233,7 @@
   },
 
   "footer": {
-    "deptTitle": "Swasthya Setu · Government of Maharashtra",
+    "deptTitle": "Jeevanya · Government of Maharashtra",
     "deptSub": "Public Health Department · National Health Mission (NHM) · Smart India Hackathon (SIH26133)",
     "privacy": "Privacy Policy",
     "terms": "Terms of Service",

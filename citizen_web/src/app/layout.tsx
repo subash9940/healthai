@@ -7,13 +7,13 @@ import CookieConsent from '../components/CookieConsent';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Swasthya Setu (स्वास्थ्य सेतु) | Rural Health Triage & Referral',
-    template: '%s | Swasthya Setu',
+    default: 'Jeevanya (जीवन्या) | Rural Health Triage & Referral',
+    template: '%s | Jeevanya',
   },
   description:
     'Free AI-assisted rural primary healthcare clinical decision support and triage referral system. Offline-first, evidence-backed clinical protocols based on National Health Mission (NHM) standards.',
   keywords: [
-    'Swasthya Setu',
+    'Jeevanya',
     'Rural Health',
     'Health Triage',
     'Clinical Decision Support',
@@ -24,10 +24,10 @@ export const metadata: Metadata = {
     'Primary Health Centre',
   ],
   authors: [{ name: 'Ministry of Health & Family Welfare / National Health Mission' }],
-  creator: 'Swasthya Setu Digital Health Initiative',
-  metadataBase: new URL('https://swasthyasetu.nhm.gov.in'),
+  creator: 'Jeevanya Digital Health Initiative',
+  metadataBase: new URL('https://jeevanya.nhm.gov.in'),
   alternates: {
-    canonical: 'https://swasthyasetu.nhm.gov.in',
+    canonical: 'https://jeevanya.nhm.gov.in',
   },
   icons: {
     icon: [
@@ -46,22 +46,22 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_IN',
-    url: 'https://swasthyasetu.nhm.gov.in',
-    title: 'Swasthya Setu (स्वास्थ्य सेतु) | Clinical Health Triage',
+    url: 'https://jeevanya.nhm.gov.in',
+    title: 'Jeevanya (जीवन्या) | Clinical Health Triage',
     description: 'Instant, evidence-backed clinical guidance and facility routing for rural citizens.',
-    siteName: 'Swasthya Setu',
+    siteName: 'Jeevanya',
     images: [
       {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Swasthya Setu - Rural Primary Healthcare Triage System',
+        alt: 'Jeevanya - Rural Primary Healthcare Triage System',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Swasthya Setu (स्वास्थ्य सेतु) | Clinical Health Triage',
+    title: 'Jeevanya (जीवन्या) | Clinical Health Triage',
     description: 'Instant, evidence-backed clinical guidance and facility routing for rural citizens.',
     images: ['/og-image.png'],
   },
@@ -78,9 +78,9 @@ const jsonLdData = [
   {
     '@context': 'https://schema.org',
     '@type': 'MedicalOrganization',
-    name: 'Swasthya Setu Rural Healthcare Initiative',
-    url: 'https://swasthyasetu.nhm.gov.in',
-    logo: 'https://swasthyasetu.nhm.gov.in/logo.png',
+    name: 'Jeevanya Rural Healthcare Initiative',
+    url: 'https://jeevanya.nhm.gov.in',
+    logo: 'https://jeevanya.nhm.gov.in/logo.png',
     description: 'National Health Mission aligned rural clinical triage and emergency facility referral network.',
     medicalSpecialty: ['EmergencyCare', 'PrimaryCare', 'CommunityHealth'],
     address: {
@@ -98,8 +98,8 @@ const jsonLdData = [
   {
     '@context': 'https://schema.org',
     '@type': 'GovernmentOrganization',
-    name: 'National Health Mission - Swasthya Setu',
-    url: 'https://swasthyasetu.nhm.gov.in',
+    name: 'National Health Mission - Jeevanya',
+    url: 'https://jeevanya.nhm.gov.in',
     parentOrganization: {
       '@type': 'GovernmentOrganization',
       name: 'Ministry of Health and Family Welfare, Government of India',
@@ -110,7 +110,7 @@ const jsonLdData = [
     '@type': 'LocalBusiness',
     additionalType: 'https://schema.org/MedicalClinic',
     name: 'Kurkheda Primary Health Centre (PHC)',
-    image: 'https://swasthyasetu.nhm.gov.in/phc-kurkheda.jpg',
+    image: 'https://jeevanya.nhm.gov.in/phc-kurkheda.jpg',
     telephone: '+91-7138-245100',
     address: {
       '@type': 'PostalAddress',
@@ -145,11 +145,11 @@ const jsonLdData = [
   {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: 'Swasthya Setu',
-    url: 'https://swasthyasetu.nhm.gov.in',
+    name: 'Jeevanya',
+    url: 'https://jeevanya.nhm.gov.in',
     potentialAction: {
       '@type': 'SearchAction',
-      target: 'https://swasthyasetu.nhm.gov.in/search?q={search_term_string}',
+      target: 'https://jeevanya.nhm.gov.in/search?q={search_term_string}',
       'query-input': 'required name=search_term_string',
     },
   },

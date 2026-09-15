@@ -2,7 +2,7 @@
  * src/types/index.ts
  *
  * Core data contracts for ASHA Field Health Application.
- * Locked to Swasthya Setu shared clinical schema.
+ * Locked to Jeevanya shared clinical schema.
  */
 
 export type Language = "mr" | "hi" | "en" | "ta";

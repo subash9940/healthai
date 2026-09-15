@@ -17,6 +17,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { THEME } from "../constants/theme";
 import { TRANSLATIONS } from "../constants/translations";
 import { Language, FacilityAvailabilityItem, FacilityOperationalStatus } from "../types";
@@ -246,7 +247,7 @@ export const FacilityAvailabilityScreen: React.FC<FacilityAvailabilityScreenProp
                 {/* Bed Counter Bar */}
                 <View style={styles.bedCounterContainer}>
                   <View style={styles.bedIconWrapper}>
-                    <Text style={styles.bedIcon}>🛏️</Text>
+                    <MaterialCommunityIcons name="bed" size={20} color={THEME.colors.primary} />
                   </View>
                   <View style={styles.bedTextWrapper}>
                     <Text style={styles.bedCount}>{facility.available_beds}</Text>
@@ -257,7 +258,10 @@ export const FacilityAvailabilityScreen: React.FC<FacilityAvailabilityScreenProp
                 {/* Broadcast Advisory Note */}
                 {facility.status_note && (
                   <View style={styles.noteBox}>
-                    <Text style={styles.noteTitle}>📢 {t.facility_broadcast_note || "Advisory"}:</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
+                      <MaterialCommunityIcons name="bullhorn-outline" size={15} color="#D97706" style={{ marginRight: 4 }} />
+                      <Text style={styles.noteTitle}>{t.facility_broadcast_note || "Advisory"}:</Text>
+                    </View>
                     <Text style={styles.noteText}>{facility.status_note}</Text>
                   </View>
                 )}

@@ -2,7 +2,7 @@
  * triageContract.ts — v2
  * 
  * TypeScript representation of triage_contract.py v2.
- * Shared locked schema across all Swasthya Setu frontends (ASHA app, citizen web, IVR).
+ * Shared locked schema across all Jeevanya frontends (ASHA app, citizen web, IVR).
  */
 
 export type Urgency = "low" | "medium" | "high" | "emergency";
