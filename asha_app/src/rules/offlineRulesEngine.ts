@@ -66,7 +66,6 @@ export const ADULT_YELLOW_MEDICAL_SYMPTOMS = [
   "fever_with_headache_or_chest_pain_or_jaundice",
   "fever_in_chemo_or_hiv_or_diabetic_patient",
   "drug_overdose_or_poisoning_with_stable_vitals",
-  "headache_or_dizziness",
   "unable_to_pass_stool",
   "unable_to_pass_urine",
   "painful_bleeding_per_rectum",
