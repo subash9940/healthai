@@ -1,5 +1,5 @@
 """
-symptom_vocab.py — authoritative symptom key vocabulary for the Swasthya Setu rule engine.
+symptom_vocab.py — authoritative symptom key vocabulary for the Jeevanya rule engine.
 
 Generated from rules_engine.py — every key here maps to at least one rule condition.
 The /extract-symptoms LLM prompt uses this list as its exclusive output vocabulary.

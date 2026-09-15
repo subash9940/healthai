@@ -42,8 +42,8 @@ export default function PrivacyPage() {
           </h3>
           <p style={{ color: 'var(--text-body)', lineHeight: 1.7, fontSize: '14px' }}>
             For questions regarding privacy, security audits, or data governance, reach out to our grievance team at{' '}
-            <a href="mailto:privacy-swasthya@nhm.gov.in" style={{ fontWeight: 600 }}>
-              privacy-swasthya@nhm.gov.in
+            <a href="mailto:privacy-jeevanya@nhm.gov.in" style={{ fontWeight: 600 }}>
+              privacy-jeevanya@nhm.gov.in
             </a>{' '}
             or call the National Health Helpline at{' '}
             <a href="tel:104" style={{ fontWeight: 600 }}>

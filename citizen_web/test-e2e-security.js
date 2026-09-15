@@ -1,5 +1,5 @@
 /**
- * Automated End-to-End & Security Test Suite for Swasthya Setu Citizen Web
+ * Automated End-to-End & Security Test Suite for Jeevanya Citizen Web
  * Testing against live localhost:3000
  */
 

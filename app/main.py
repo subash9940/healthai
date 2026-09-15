@@ -1,5 +1,5 @@
 """
-Swasthya Setu API — main FastAPI application.
+Jeevanya API — main FastAPI application.
 
 Wired for DB persistence as of the /triage endpoint integration.
 """
@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
     await close_pool()
 
 
-app = FastAPI(title="Swasthya Setu API", lifespan=lifespan)
+app = FastAPI(title="Jeevanya API", lifespan=lifespan)
 
 # Allow all origins for development and local testing
 app.add_middleware(
@@ -109,7 +109,7 @@ async def extract_symptoms(request: ExtractSymptomsRequest):
         api_key="dummy-key-for-local-proxy",
     )
 
-    system_prompt = f"""You are a clinical symptom extraction assistant for Swasthya Setu, an AI triage system for rural India.
+    system_prompt = f"""You are a clinical symptom extraction assistant for Jeevanya, an AI triage system for rural India.
 
 Your ONLY job: read the patient's narrative description of symptoms (in English, Hindi, Marathi, or Tamil) and accurately extract all matching symptom keys from the official vocabulary below. Patients often speak in long, multi-sentence stories mentioning multiple symptoms and numbers.
 

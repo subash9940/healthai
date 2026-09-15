@@ -2,7 +2,7 @@
 fallback_extractor.py — Deterministic offline keyword/fuzzy matcher for symptom extraction.
 
 Used when the external LLM proxy (OmniRoute / Kiro / OpenAI / Anthropic) is offline
-or has exhausted its credits. This ensures the Swasthya Setu NLP feature works 100%
+or has exhausted its credits. This ensures the Jeevanya NLP feature works 100%
 of the time, locally, offline in rural health sub-centres with 0 API dependencies.
 
 Includes comprehensive conversational, colloquial, and phonetic variants across:

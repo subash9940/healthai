@@ -30,7 +30,7 @@ function assert(condition: boolean, testName: string, details?: string) {
 }
 
 console.log("\n=======================================================");
-console.log("  SWASTHYA SETU — COMPREHENSIVE TEST SUITE (WEB & MOBILE)");
+console.log("  JEEVANYA — COMPREHENSIVE TEST SUITE (WEB & MOBILE)");
 console.log("=======================================================\n");
 
 // -----------------------------------------------------------------------------
