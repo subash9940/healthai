@@ -1,3 +1,4 @@
+// UNUSED — not imported anywhere as of 2026-09. See symptomTranslations.ts (citizen_web) and constants/symptoms.ts (asha_app) for the live symptom lists.
 /**
  * symptomCatalog.ts
  *

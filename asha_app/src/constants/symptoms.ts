@@ -157,6 +157,23 @@ export const ASHA_SYMPTOMS: SymptomItem[] = [
       ta: "தொடர் இருமல்",
     },
   },
+  {
+    id: "low_risk_cough_or_cold",
+    isDangerSign: false,
+    category: "respiratory",
+    labels: {
+      mr: "सर्दी, शिंका किंवा घसा खवखवणे",
+      hi: "जुकाम, छींकें या गले में खराश",
+      en: "Common cold, runny nose or sneezing",
+      ta: "சாதாரண ஜலதோஷம், மூக்கு ஒழுகுதல் அல்லது தும்மல்",
+    },
+    description: {
+      mr: "सौम्य सर्दी व नाक वाहणे",
+      hi: "हल्की सर्दी और नाक बहना",
+      en: "Mild upper respiratory symptoms / runny nose",
+      ta: "லேசான சளி மற்றும் மூக்கடைப்பு அறிகுறிகள்",
+    },
+  },
 
   // 3. Fever & Infectious
   {
