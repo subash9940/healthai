@@ -47,46 +47,53 @@ export const SyncService = {
         });
         clearTimeout(timeout);
 
-        if (response.ok) {
-          // Send sync payload
-          const syncPayload = {
-            patients: pendingPatients,
-            referrals: pendingReferrals,
-            synced_at: new Date().toISOString(),
+        if (!response.ok) {
+          return {
+            success: false,
+            syncedCount: 0,
+            message: `Health check failed with status ${response.status}. Records remain in outbox.`,
           };
-
-          const pushRes = await fetch(`${BACKEND_URL}/sync`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(syncPayload),
-          });
-
-          if (pushRes.ok) {
-            const syncedPatientIds = pendingPatients.map((p) => p.patient.patient_id);
-            const syncedReferralIds = pendingReferrals.map((r) => r.referral_id);
-            await StorageService.markRecordsAsSynced(syncedPatientIds, syncedReferralIds);
-
-            return {
-              success: true,
-              syncedCount: pendingPatients.length + pendingReferrals.length,
-              message: `Successfully synchronized ${pendingPatients.length + pendingReferrals.length} records.`,
-            };
-          }
         }
-      } catch {
-        // Backend offline / network unreachable
+
+        // Send sync payload
+        const syncPayload = {
+          patients: pendingPatients,
+          referrals: pendingReferrals,
+          synced_at: new Date().toISOString(),
+        };
+
+        const pushRes = await fetch(`${BACKEND_URL}/sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(syncPayload),
+        });
+
+        if (!pushRes.ok) {
+          return {
+            success: false,
+            syncedCount: 0,
+            message: `Sync failed with status ${pushRes.status}. Records remain in outbox.`,
+          };
+        }
+
+        const syncedPatientIds = pendingPatients.map((p) => p.patient.patient_id);
+        const syncedReferralIds = pendingReferrals.map((r) => r.referral_id);
+        await StorageService.markRecordsAsSynced(syncedPatientIds, syncedReferralIds);
+
+        return {
+          success: true,
+          syncedCount: pendingPatients.length + pendingReferrals.length,
+          message: `Successfully synchronized ${pendingPatients.length + pendingReferrals.length} records.`,
+        };
+      } catch (err: any) {
+        clearTimeout(timeout);
+        return {
+          success: false,
+          syncedCount: 0,
+          message: "Unable to reach backend server. Records remain in outbox.",
+          error: err?.message || "Network unreachable",
+        };
       }
-
-      // Offline mock sync success simulation for demo resilience
-      const syncedPatientIds = pendingPatients.map((p) => p.patient.patient_id);
-      const syncedReferralIds = pendingReferrals.map((r) => r.referral_id);
-      await StorageService.markRecordsAsSynced(syncedPatientIds, syncedReferralIds);
-
-      return {
-        success: true,
-        syncedCount: pendingPatients.length + pendingReferrals.length,
-        message: `Offline Sync Outbox cleared (${pendingPatients.length + pendingReferrals.length} items verified locally).`,
-      };
     } catch (e: any) {
       return {
         success: false,
