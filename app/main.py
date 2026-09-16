@@ -19,8 +19,9 @@ from pydantic import BaseModel
 import asyncpg
 
 from app.db import init_pool, close_pool, get_pool
-from app.persistence import save_triage
+from app.persistence import save_triage, save_sync_batch
 from app.schemas.triage import TriageRequest, TriageResponse
+from app.schemas.sync import SyncRequest, SyncResponse
 from app.services.rules_engine import evaluate
 from app.symptom_vocab import SYMPTOM_KEYS, SYMPTOM_KEY_SET
 from app.facility_routes import router as facility_router
@@ -48,6 +49,25 @@ app.add_middleware(
 )
 
 app.include_router(facility_router)
+
+
+@app.get("/health")
+async def health_check():
+    """Trivial health check endpoint for mobile/client reachability probes."""
+    return {"status": "ok"}
+
+
+@app.post("/sync", response_model=SyncResponse)
+async def sync_outbox(
+    request: SyncRequest,
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Synchronizes an ASHA Field Mobile App outbox batch into PostgreSQL.
+    Creates patients, triage records, referrals, and state transitions atomically.
+    """
+    result = await save_sync_batch(pool, request)
+    return SyncResponse(**result)
 
 
 @app.post("/triage", response_model=TriageResponse)

@@ -24,6 +24,7 @@ TriageResponse fields:
 
 import json
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 import asyncpg
@@ -269,3 +270,224 @@ async def _create_referral(
     )
 
     return referral_id
+
+
+def _parse_iso_datetime(dt_str: Optional[str]) -> datetime:
+    """Parse ISO 8601 string to timezone-aware UTC datetime."""
+    if not dt_str:
+        return datetime.now(timezone.utc)
+    try:
+        cleaned = str(dt_str).replace("Z", "+00:00")
+        dt = datetime.fromisoformat(cleaned)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return datetime.now(timezone.utc)
+
+
+def _normalize_facility_level(level: Optional[str]) -> Optional[str]:
+    """Map mobile facility level string to PostgreSQL facility_level enum."""
+    if not level:
+        return None
+    val = str(level).lower().strip()
+    if val in ("phc", "chc", "district_hospital"):
+        return val
+    if val in ("sdh", "dh", "hospital"):
+        return "district_hospital"
+    if val in ("sub_centre", "sub_center", "hsc"):
+        return "phc"
+    return None
+
+
+def _normalize_referral_state(state: Optional[str]) -> str:
+    """Map mobile referral status string to PostgreSQL referral_state enum."""
+    if not state:
+        return "created"
+    val = str(state).lower().strip()
+    if val in ("created", "in_transit", "received_at_facility", "closed", "cancelled"):
+        return val
+    return "created"
+
+
+async def save_sync_batch(
+    pool: asyncpg.Pool,
+    sync_request: Any,
+) -> dict:
+    """
+    Persists a batch of patient records and referral records synchronized from
+    the ASHA Field App outbox into PostgreSQL with full referential integrity.
+
+    Returns:
+        {
+            "status": "ok",
+            "synced_patient_ids": list[str],
+            "synced_referral_ids": list[str],
+            "persisted_patients_count": int,
+            "persisted_referrals_count": int,
+            "message": str,
+        }
+    """
+    synced_patient_ids: list[str] = []
+    synced_referral_ids: list[str] = []
+    patient_map: dict[str, tuple[uuid.UUID, uuid.UUID]] = {}
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # 1. Process patient screening records
+            for p in getattr(sync_request, "patients", []):
+                p_demographics = p.patient
+                p_fields = {
+                    "patient_id": None,
+                    "display_name": p_demographics.patient_display_name,
+                    "age_years": p_demographics.patient_age_years,
+                    "sex": _enum_val(p_demographics.patient_sex),
+                    "village": p_demographics.patient_village,
+                    "phone": p_demographics.mobile,
+                    "abha_id": p_demographics.abha_id,
+                }
+                patient_db_id = await get_or_create_patient(conn, p_fields)
+                created_at_dt = _parse_iso_datetime(p.created_at)
+                target_level = _normalize_facility_level(
+                    getattr(p.triage, "referral_target_level", None)
+                )
+
+                triage_row = await conn.fetchrow(
+                    """
+                    INSERT INTO triage_records (
+                        patient_id, source_tier, language, symptoms, vitals,
+                        is_pregnant, is_postpartum, urgency, recommended_action,
+                        citizen_message, rule_trace, requires_referral,
+                        referral_target_level, created_at
+                    )
+                    VALUES (
+                        $1, 'asha_app', 'mr', $2::jsonb, $3::jsonb,
+                        $4, $5, $6, $7,
+                        $8, $9::jsonb, $10,
+                        $11, $12
+                    )
+                    RETURNING id
+                    """,
+                    patient_db_id,
+                    _to_jsonb(p.symptoms),
+                    _to_jsonb(p.vitals),
+                    p_demographics.is_pregnant,
+                    getattr(p_demographics, "is_postpartum", False) or False,
+                    _enum_val(p.triage.urgency),
+                    p.triage.recommended_action,
+                    p.triage.citizen_message or "",
+                    _to_jsonb(p.triage.rule_trace),
+                    p.triage.requires_referral,
+                    target_level,
+                    created_at_dt,
+                )
+                triage_record_id = triage_row["id"]
+                patient_map[p_demographics.patient_id] = (patient_db_id, triage_record_id)
+                synced_patient_ids.append(p_demographics.patient_id)
+
+            # 2. Process referral records
+            for r in getattr(sync_request, "referrals", []):
+                triage_record_id = None
+                if r.patient_id in patient_map:
+                    _, triage_record_id = patient_map[r.patient_id]
+                else:
+                    p_fields = {
+                        "patient_id": None,
+                        "display_name": r.patient_name,
+                        "age_years": r.patient_age,
+                        "sex": _enum_val(r.patient_sex),
+                        "village": r.patient_village,
+                        "phone": r.patient_phone,
+                        "abha_id": None,
+                    }
+                    patient_db_id = await get_or_create_patient(conn, p_fields)
+                    target_level = _normalize_facility_level(r.target_facility)
+                    created_at_dt = _parse_iso_datetime(r.created_at)
+
+                    triage_row = await conn.fetchrow(
+                        """
+                        INSERT INTO triage_records (
+                            patient_id, source_tier, language, symptoms, vitals,
+                            is_pregnant, is_postpartum, urgency, recommended_action,
+                            citizen_message, rule_trace, requires_referral,
+                            referral_target_level, created_at
+                        )
+                        VALUES (
+                            $1, 'asha_app', 'mr', $2::jsonb, NULL,
+                            NULL, FALSE, $3, $4,
+                            '', '[]'::jsonb, TRUE,
+                            $5, $6
+                        )
+                        RETURNING id
+                        """,
+                        patient_db_id,
+                        _to_jsonb(r.symptoms),
+                        _enum_val(r.urgency),
+                        r.recommended_action,
+                        target_level,
+                        created_at_dt,
+                    )
+                    triage_record_id = triage_row["id"]
+
+                r_state = _normalize_referral_state(r.status)
+                r_created_at = _parse_iso_datetime(r.created_at)
+
+                referral_row = await conn.fetchrow(
+                    """
+                    INSERT INTO referrals (
+                        triage_record_id, facility_id, created_by, state, created_by_role, created_at, updated_at
+                    )
+                    VALUES ($1, NULL, NULL, $2, 'asha', $3, $3)
+                    RETURNING id
+                    """,
+                    triage_record_id,
+                    r_state,
+                    r_created_at,
+                )
+                referral_db_id = referral_row["id"]
+
+                status_history = getattr(r, "status_history", [])
+                if status_history and len(status_history) > 0:
+                    prev_state = None
+                    for item in status_history:
+                        curr_state = _normalize_referral_state(item.status)
+                        item_dt = _parse_iso_datetime(item.timestamp)
+                        await conn.execute(
+                            """
+                            INSERT INTO referral_state_transitions (
+                                referral_id, from_state, to_state, changed_by, changed_at, notes
+                            )
+                            VALUES ($1, $2, $3, NULL, $4, $5)
+                            """,
+                            referral_db_id,
+                            prev_state,
+                            curr_state,
+                            item_dt,
+                            item.note or f"Status transitioned to {curr_state}",
+                        )
+                        prev_state = curr_state
+                else:
+                    await conn.execute(
+                        """
+                        INSERT INTO referral_state_transitions (
+                            referral_id, from_state, to_state, changed_by, changed_at, notes
+                        )
+                        VALUES ($1, NULL, $2, NULL, $3, 'Referral synced from ASHA Field App')
+                        """,
+                        referral_db_id,
+                        r_state,
+                        r_created_at,
+                    )
+
+                synced_referral_ids.append(r.referral_id)
+
+    total_synced = len(synced_patient_ids) + len(synced_referral_ids)
+    return {
+        "status": "ok",
+        "synced_patient_ids": synced_patient_ids,
+        "synced_referral_ids": synced_referral_ids,
+        "persisted_patients_count": len(synced_patient_ids),
+        "persisted_referrals_count": len(synced_referral_ids),
+        "message": f"Successfully synchronized {total_synced} records.",
+    }
+

@@ -6,9 +6,13 @@
  * Gracefully handles offline / airplane mode with zero crash rate.
  */
 
+import { Platform } from "react-native";
 import { StorageService } from "./storageService";
 
-const BACKEND_URL = "http://10.0.2.2:8001"; // Default Android emulator host loopback or localhost
+const BACKEND_URL =
+  Platform.OS === "android"
+    ? "http://10.0.2.2:8001"
+    : "http://127.0.0.1:8001";
 
 export interface SyncResult {
   success: boolean;
