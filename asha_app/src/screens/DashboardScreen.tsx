@@ -122,25 +122,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     }
   };
 
-  const handleUpdateStatus = async (referralId: string, nextStatus: "in_transit" | "received_at_facility" | "closed") => {
-    let note = `Status updated to ${nextStatus}`;
-    if (nextStatus === "in_transit") {
-      note = "108 Ambulance dispatched / patient in transit";
-    } else if (nextStatus === "received_at_facility") {
-      note = "Patient received and admitted at facility triage desk";
-    } else if (nextStatus === "closed") {
-      note = "Treatment completed / referral closed";
-    }
-
-    await StorageService.updateReferralStatus(referralId, nextStatus, note);
-    await StorageService.logSecurityEvent(
-      "REFERRAL_STATUS_UPDATED",
-      session.worker_id,
-      `Referral [${referralId}] status updated to ${nextStatus}`
-    );
-    await loadDashboardData();
-  };
-
   const handleCallEmergency = (phone: string = "108") => {
     Linking.openURL(`tel:${phone}`).catch(() => {
       Alert.alert("Emergency Dispatch", `Call ${phone} for immediate medical ambulance.`);
@@ -484,55 +465,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               <View style={styles.facilityBox}>
                 <Text style={styles.facilityLabel}>Target Facility: </Text>
                 <Text style={styles.facilityName}>{ref.target_facility || "PHC Ghodegaon"}</Text>
-              </View>
-
-              {/* State Machine Action Controls */}
-              <View style={styles.stateMachineButtonsRow}>
-                {ref.status === "created" && (
-                  <TouchableOpacity
-                    style={styles.actionBtnTransit}
-                    onPress={() => handleUpdateStatus(ref.referral_id, "in_transit")}
-                    activeOpacity={0.7}
-                  >
-                    <View style={{ flexDirection: "row", alignItems: "center" }}>
-                      <MaterialCommunityIcons name="ambulance" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.actionBtnTransitText}>Dispatch 108 (Mark In-Transit)</Text>
-                    </View>
-                  </TouchableOpacity>
-                )}
-
-                {ref.status === "in_transit" && (
-                  <TouchableOpacity
-                    style={styles.actionBtnReceive}
-                    onPress={() => handleUpdateStatus(ref.referral_id, "received_at_facility")}
-                    activeOpacity={0.7}
-                  >
-                    <View style={{ flexDirection: "row", alignItems: "center" }}>
-                      <MaterialCommunityIcons name="hospital-building" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.actionBtnReceiveText}>Mark Admitted at PHC</Text>
-                    </View>
-                  </TouchableOpacity>
-                )}
-
-                {ref.status === "received_at_facility" && (
-                  <TouchableOpacity
-                    style={styles.actionBtnClose}
-                    onPress={() => handleUpdateStatus(ref.referral_id, "closed")}
-                    activeOpacity={0.7}
-                  >
-                    <View style={{ flexDirection: "row", alignItems: "center" }}>
-                      <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.actionBtnCloseText}>Discharge / Close Case</Text>
-                    </View>
-                  </TouchableOpacity>
-                )}
-
-                {ref.status === "closed" && (
-                  <View style={styles.caseClosedBadge}>
-                    <Ionicons name="checkmark-done" size={14} color="#16A34A" style={{ marginRight: 4 }} />
-                    <Text style={styles.caseClosedText}>Treatment completed at facility</Text>
-                  </View>
-                )}
               </View>
             </View>
           );
@@ -1087,57 +1019,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: THEME.colors.textPrimary,
     fontWeight: "600",
-  },
-  stateMachineButtonsRow: {
-    marginTop: 8,
-  },
-  actionBtnTransit: {
-    backgroundColor: "#FEF3C7",
-    borderWidth: 1,
-    borderColor: "#F59E0B",
-    borderRadius: THEME.borderRadius.md,
-    paddingVertical: 7,
-    alignItems: "center",
-  },
-  actionBtnTransitText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#92400E",
-  },
-  actionBtnReceive: {
-    backgroundColor: "#E0F2FE",
-    borderWidth: 1,
-    borderColor: "#0284C7",
-    borderRadius: THEME.borderRadius.md,
-    paddingVertical: 7,
-    alignItems: "center",
-  },
-  actionBtnReceiveText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#0369A1",
-  },
-  actionBtnClose: {
-    backgroundColor: "#DCFCE7",
-    borderWidth: 1,
-    borderColor: "#16A34A",
-    borderRadius: THEME.borderRadius.md,
-    paddingVertical: 7,
-    alignItems: "center",
-  },
-  actionBtnCloseText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#166534",
-  },
-  caseClosedBadge: {
-    paddingVertical: 4,
-    alignItems: "center",
-  },
-  caseClosedText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#16A34A",
   },
 
   // 5. Supervisor & Admin Section
