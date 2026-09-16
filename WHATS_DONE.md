@@ -193,9 +193,24 @@ The clinical decision matrix spans **45+ triage rules** adhering strictly to off
 - **Vitals & Triage Result (`ResultScreen.tsx`)**: Displays urgency badges, facility targets, and duration-tailored action guidance.
 - **Emergency 1-Touch Quick Dispatch**: Direct integration for calling **108 Emergency Ambulance** and **102 Janani Express** maternal transport.
 
-### 4.3 Read-Only Frontline Referral Tracking (`ReferralQueueScreen.tsx`)
+### 4.3 Read-Only Frontline Referral Tracking (`ReferralQueueScreen.tsx` & `DashboardScreen.tsx`)
 - **Strict Role Separation**: Frontline ASHA workers can track patient referral statuses (`created`, `in_transit`, `received_at_facility`, `closed`) created during field screening.
-- **State Machine Ownership**: Mutation triggers (`in_transit`, `received_at_facility`, `closed`) have been removed from the mobile client, ensuring state transitions are strictly executed by authenticated medical officers and facility staff via the Facility Web Portal (`/facility`).
+- **State Machine Ownership**: Mutation triggers (`in_transit`, `received_at_facility`, `closed`) have been completely removed from both `ReferralQueueScreen.tsx` and `DashboardScreen.tsx` (confirmed 0 screen callers of `updateReferralStatus`).
+- **Clinical Governance**: Referral state transitions are strictly executed by authenticated medical officers and facility staff via the Facility Web Portal (`/facility`).
+
+### 4.4 Real Offline-to-Online Synchronization Engine (`syncService.ts` & `POST /sync`)
+- **Fake-Sync Fallback Resolution (Critical Fix)**:
+  - *Previous Issue*: `syncService.ts` contained an offline mock sync simulation fallback that caught failed network requests, called `StorageService.markRecordsAsSynced`, and returned fake `success: true`. As a consequence, **any referrals created in the mobile app prior to this fix were never transmitted or persisted to the PostgreSQL database**.
+  - *Honest Offline Resilience*: Deleted the mock simulation fallback completely. When network connectivity fails or the backend is unreachable, `performSync()` now honestly returns `success: false` with detailed error feedback, keeping all screening records and referrals safely stored in the local outbox until a real sync succeeds.
+- **Backend Sync API (`POST /sync` & `GET /health`)**:
+  - Added `GET /health` endpoint returning `{"status": "ok"}` for rapid reachability probing.
+  - Implemented `POST /sync` in `app/main.py` accepting validated batch sync payloads (`SyncRequest` in `app/schemas/sync.py`).
+  - Added atomic PostgreSQL persistence in `save_sync_batch` (`app/persistence.py`):
+    1. Resolves/deduplicates patients via phone or creates new `patients` records.
+    2. Inserts `triage_records` rows linked to `patient_id` with parsed symptoms, vitals, and duration.
+    3. Inserts `referrals` rows linked to `triage_record_id` with `created_by_role = 'asha'` and `facility_id = NULL`.
+    4. Inserts `referral_state_transitions` preserving the full client-side status history audit trail.
+- **Adaptive Networking**: Updated `BACKEND_URL` in `syncService.ts` with `Platform.OS` detection (`http://10.0.2.2:8001` for Android emulators, `http://127.0.0.1:8001` for local/iOS development).
 
 ---
 
