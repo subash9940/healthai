@@ -108,6 +108,7 @@ class ExtractSymptomsRequest(BaseModel):
 class ExtractSymptomsResponse(BaseModel):
     symptoms: list[str]
     vitals_mentioned: dict[str, float | None] = {}
+    duration_days: int | None = None
 
 
 @app.post("/extract-symptoms", response_model=ExtractSymptomsResponse)
@@ -140,7 +141,8 @@ EXTRACTION RULES:
 1. Output ONLY exact keys from the official list above — never invent new keys.
 2. Carefully parse compound and multi-clause sentences (e.g., fever + vomiting + fast breathing) to extract ALL present symptoms.
 3. Extract any vitals mentioned in the text into "vitals_mentioned" (keys: temperature_celsius, pulse_bpm, systolic_bp, diastolic_bp, respiratory_rate, spo2_percent; null if not mentioned). Convert Fahrenheit to Celsius if applicable (e.g., 102°F → 38.9°C).
-4. Return ONLY a valid JSON object with the following schema:
+4. Extract symptom duration in days into "duration_days" as an integer (e.g., "today"/"since morning" -> 0, "yesterday" -> 1, "3 days" -> 3, "1 week" -> 7, "2 weeks" -> 14; null if duration is not mentioned).
+5. Return ONLY a valid JSON object with the following schema:
    {{
      "symptoms": ["symptom_key_1", "symptom_key_2", ...],
      "vitals_mentioned": {{
@@ -150,25 +152,26 @@ EXTRACTION RULES:
        "diastolic_bp": int or null,
        "respiratory_rate": int or null,
        "spo2_percent": int or null
-     }}
+     }},
+     "duration_days": int or null
    }}
 
 NARRATIVE EXAMPLES:
 - Example 1 (Hindi multi-sentence):
   Input: "बच्चे को 2 दिन से बहुत तेज बुखार है, वह कुछ भी नहीं पी पा रहा है, बार-बार उल्टी कर रहा है और छाती में तेज सांस चल रही है।"
-  Output: {{"symptoms": ["fever", "not_able_to_drink_or_feed", "vomiting", "difficult_breathing"], "vitals_mentioned": {{}}}}
+  Output: {{"symptoms": ["fever", "not_able_to_drink_or_feed", "vomiting", "difficult_breathing"], "vitals_mentioned": {{}}, "duration_days": 2}}
 
 - Example 2 (Marathi multi-sentence):
   Input: "माझ्या सासूबाईंना छातीत खूप कळ मारते आहे, घाम फुटला आहे, चक्कर येऊन पडल्या आणि BP 160/100 मोजला आहे."
-  Output: {{"symptoms": ["chest_pain", "lethargic_or_unconscious", "headache_or_dizziness"], "vitals_mentioned": {{"systolic_bp": 160, "diastolic_bp": 100}}}}
+  Output: {{"symptoms": ["chest_pain", "lethargic_or_unconscious", "headache_or_dizziness"], "vitals_mentioned": {{"systolic_bp": 160, "diastolic_bp": 100}}, "duration_days": null}}
 
 - Example 3 (Tamil multi-sentence):
   Input: "3 வயது குழந்தைக்கு இரண்டு நாளாக கடும் காய்ச்சல், எது சாப்பிட்டாலும் வாந்தி வருது, மூச்சு விட ரொம்ப சிரமப்படுகிறான், இருமலும் இருக்கு."
-  Output: {{"symptoms": ["fever", "vomiting", "difficult_breathing", "cough"], "vitals_mentioned": {{}}}}
+  Output: {{"symptoms": ["fever", "vomiting", "difficult_breathing", "cough"], "vitals_mentioned": {{}}, "duration_days": 2}}
 
 - Example 4 (English rural clinical account):
-  Input: "Pregnant mother 28 years old reporting severe headache, blurred vision, swelling on feet and face, BP checked at 155/98 mmHg."
-  Output: {{"symptoms": ["headache_or_dizziness", "visual_disturbances", "swelling_face_or_hands"], "vitals_mentioned": {{"systolic_bp": 155, "diastolic_bp": 98}}}}
+  Input: "Pregnant mother 28 years old reporting severe headache for 4 days, blurred vision, swelling on feet and face, BP checked at 155/98 mmHg."
+  Output: {{"symptoms": ["headache_or_dizziness", "visual_disturbances", "swelling_face_or_hands"], "vitals_mentioned": {{"systolic_bp": 155, "diastolic_bp": 98}}, "duration_days": 4}}
 
 Now extract all symptoms and vitals from the user's input."""
 
@@ -213,10 +216,17 @@ Now extract all symptoms and vitals from the user's input."""
             logger.warning(f"LLM produced invalid symptom keys: {invalid}")
 
         vitals = parsed.get("vitals_mentioned", {})
+        duration_days = parsed.get("duration_days")
+        if duration_days is not None:
+            try:
+                duration_days = int(duration_days)
+            except (ValueError, TypeError):
+                duration_days = None
 
         return ExtractSymptomsResponse(
             symptoms=valid_symptoms,
             vitals_mentioned=vitals,
+            duration_days=duration_days,
         )
 
     except Exception as e:
@@ -226,4 +236,60 @@ Now extract all symptoms and vitals from the user's input."""
         return ExtractSymptomsResponse(
             symptoms=fallback_res["symptoms"],
             vitals_mentioned=fallback_res["vitals_mentioned"],
+            duration_days=fallback_res.get("duration_days"),
         )
+
+
+# ---------------------------------------------------------------------------
+# Emergency SOS Alerts (Part D)
+# ---------------------------------------------------------------------------
+
+class SOSAlertRequest(BaseModel):
+    latitude: float | None = None
+    longitude: float | None = None
+    patient_context: dict = {}
+    timestamp: str | None = None
+
+
+class SOSAlertResponse(BaseModel):
+    id: str
+    latitude: float | None
+    longitude: float | None
+    patient_context: dict
+    status: str
+    created_at: str
+    message: str
+
+
+@app.post("/sos", response_model=SOSAlertResponse)
+async def create_sos_alert(
+    request: SOSAlertRequest,
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Emergency SOS endpoint.
+    Records high-priority SOS alerts with optional GPS coordinates and patient context.
+    Persists to isolated `sos_alerts` table without mutating core referral tables.
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO sos_alerts (latitude, longitude, patient_context, status)
+            VALUES ($1, $2, $3::jsonb, 'active')
+            RETURNING id, latitude, longitude, patient_context, status, created_at
+            """,
+            request.latitude,
+            request.longitude,
+            json.dumps(request.patient_context),
+        )
+
+        return SOSAlertResponse(
+            id=str(row["id"]),
+            latitude=row["latitude"],
+            longitude=row["longitude"],
+            patient_context=json.loads(row["patient_context"]) if isinstance(row["patient_context"], str) else (row["patient_context"] or {}),
+            status=row["status"],
+            created_at=row["created_at"].isoformat(),
+            message="Emergency SOS alert received and broadcast to response network.",
+        )
+

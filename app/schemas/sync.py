@@ -58,6 +58,8 @@ class ReferralRecordSync(BaseModel):
     patient_sex: Sex
     urgency: Urgency
     target_facility: Optional[str] = "phc"
+    facility_id: Optional[str] = None
+    facility_name: Optional[str] = None
     status: str = "created"  # "created" | "in_transit" | "received_at_facility" | "closed"
     status_history: List[StatusHistoryItemSync] = Field(default_factory=list)
     symptoms: List[str] = Field(default_factory=list)
