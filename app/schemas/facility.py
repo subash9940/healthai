@@ -34,6 +34,21 @@ class FacilityAvailabilityItem(BaseModel):
     district: Optional[str] = "Pune"
 
 
+class FacilityNearbyItem(BaseModel):
+    id: str
+    name: str
+    level: str
+    operational_status: str  # 'AVAILABLE' | 'BUSY' | 'EMERGENCY_ONLY' | 'FULL'
+    available_beds: int
+    status_note: Optional[str] = None
+    contact_phone: Optional[str] = None
+    district: Optional[str] = "Pune"
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    distance_km: Optional[float] = None
+    updated_at: Optional[str] = None
+
+
 class FacilityStaffInfo(BaseModel):
     id: str
     name: str
