@@ -1447,31 +1447,6 @@ img {
 }
 
 /* ============================================================
-   PRINT STYLES
-   ============================================================ */
-
-@media print {
-  .top-gov-strip,
-  .main-header,
-  .emergency-strip,
-  .cookie-banner,
-  .btn-row,
-  .site-footer {
-    display: none !important;
-  }
-
-  body {
-    background: #fff;
-    font-size: 12pt;
-  }
-
-  .result-card {
-    box-shadow: none;
-    border: 1px solid #999;
-  }
-}
-
-/* ============================================================
    FACILITY DASHBOARD & STITCH DESIGN SYSTEM COMPONENT STYLES
    ============================================================ */
 
