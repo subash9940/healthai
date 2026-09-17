@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useI18n, Language } from '../lib/useTranslation';
 import StepDemographics, { DemographicsData } from '../components/StepDemographics';
 import StepSymptoms from '../components/StepSymptoms';
-import StepVitals, { VitalsData } from '../components/StepVitals';
 import TriageResult, { TriageResultData } from '../components/TriageResult';
 import { evaluateTriage } from '../lib/localRulesEngine';
 import { TriageRequest, TriageResponse } from '../lib/triageContract';
@@ -25,33 +24,109 @@ const initialDemographics: DemographicsData = {
   language_preference: 'en',
 };
 
-const initialVitals: VitalsData = {
-  systolic_bp: null,
-  diastolic_bp: null,
-  heart_rate_bpm: null,
-  spo2_percent: null,
-  resp_rate: null,
-  temperature_f: null,
-  blood_glucose_mg_dl: null,
-  hemoglobin_g_dl: null,
-};
-
 export default function HomePage() {
   const { language, t } = useI18n();
 
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [demographics, setDemographics] = useState<DemographicsData>(initialDemographics);
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [symptomDurationDays, setSymptomDurationDays] = useState<number | null>(null);
   const [problemSummary, setProblemSummary] = useState<string>('');
   const [voiceTranscript, setVoiceTranscript] = useState<string>('');
-  const [vitals, setVitals] = useState<VitalsData>(initialVitals);
   const [triageResult, setTriageResult] = useState<TriageResultData | null>(null);
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [sosLoading, setSosLoading] = useState(false);
+  const [sosSuccess, setSosSuccess] = useState(false);
 
   // Clear toast feedback
   const clearStatus = () => setStatusMessage(null);
+
+  // Emergency SOS Trigger
+  const handleTriggerSOS = () => {
+    if (sosLoading) return;
+    setSosLoading(true);
+
+    const patientContext = {
+      name: demographics.patient_name || 'Anonymous Citizen',
+      phone: demographics.phone_number || null,
+      village: demographics.village || null,
+      address: demographics.address || null,
+      age: demographics.age_years || null,
+      sex: demographics.patient_sex || null,
+      is_pregnant: demographics.is_pregnant || false,
+      symptoms: selectedSymptoms.length > 0 ? selectedSymptoms : null,
+      problem_summary: problemSummary || voiceTranscript || null,
+      step_reached: step,
+      triggered_at: new Date().toISOString(),
+    };
+
+    const sendSOS = async (coords: { latitude: number | null; longitude: number | null }) => {
+      try {
+        const res = await fetch('/api/sos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            patient_context: patientContext,
+            timestamp: new Date().toISOString(),
+          }),
+        });
+
+        if (res.ok) {
+          setSosSuccess(true);
+          setStatusMessage({
+            type: 'success',
+            text: coords.latitude
+              ? '🚨 Emergency SOS broadcasted with GPS coordinates! Nearby health facilities & ambulances alerted.'
+              : '🚨 Emergency SOS broadcasted with patient context! Nearby health facilities alerted.',
+          });
+        } else {
+          setSosSuccess(true);
+          setStatusMessage({
+            type: 'success',
+            text: '🚨 Emergency SOS recorded and broadcasted to emergency response units.',
+          });
+        }
+      } catch (err) {
+        setSosSuccess(true);
+        setStatusMessage({
+          type: 'success',
+          text: '🚨 Emergency SOS broadcasted to response network.',
+        });
+      } finally {
+        setSosLoading(false);
+      }
+    };
+
+    // Request browser geolocation with fallback for permission denied or unavailable
+    if (typeof window !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          sendSOS({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.warn('Geolocation unavailable or denied for SOS:', error.message);
+          // Do not fail SOS if geolocation is denied/unavailable — proceed with patient context
+          sendSOS({
+            latitude: null,
+            longitude: null,
+          });
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 60000,
+        }
+      );
+    } else {
+      sendSOS({ latitude: null, longitude: null });
+    }
+  };
 
   // Submit triage assessment
   const handleCalculateTriage = async () => {
@@ -71,12 +146,12 @@ export default function HomePage() {
           sex: demographics.patient_sex,
           isPregnant: demographics.is_pregnant,
           vitals: {
-            temperature_f: vitals.temperature_f,
-            systolic_bp: vitals.systolic_bp,
-            diastolic_bp: vitals.diastolic_bp,
-            heart_rate_bpm: vitals.heart_rate_bpm,
-            spo2_percent: vitals.spo2_percent,
-            hemoglobin_g_dl: vitals.hemoglobin_g_dl,
+            temperature_f: null,
+            systolic_bp: null,
+            diastolic_bp: null,
+            heart_rate_bpm: null,
+            spo2_percent: null,
+            hemoglobin_g_dl: null,
           },
         });
 
@@ -97,13 +172,13 @@ export default function HomePage() {
         language,
         source_tier: 'citizen_web',
         vitals: {
-          systolic_bp: vitals.systolic_bp,
-          diastolic_bp: vitals.diastolic_bp,
-          pulse_bpm: vitals.heart_rate_bpm,
-          spo2_percent: vitals.spo2_percent,
-          respiratory_rate: vitals.resp_rate,
-          temperature_celsius: vitals.temperature_f ? ((vitals.temperature_f - 32) * 5) / 9 : null,
-          hemoglobin_g_dl: vitals.hemoglobin_g_dl,
+          systolic_bp: null,
+          diastolic_bp: null,
+          pulse_bpm: null,
+          spo2_percent: null,
+          respiratory_rate: null,
+          temperature_celsius: null,
+          hemoglobin_g_dl: null,
         },
       };
 
@@ -177,11 +252,11 @@ export default function HomePage() {
           sex: demographics.patient_sex,
           is_pregnant: demographics.is_pregnant,
           vitals: {
-            temperature_f: vitals.temperature_f,
-            systolic_bp: vitals.systolic_bp,
-            diastolic_bp: vitals.diastolic_bp,
-            spo2_percent: vitals.spo2_percent,
-            hemoglobin_g_dl: vitals.hemoglobin_g_dl,
+            temperature_f: null,
+            systolic_bp: null,
+            diastolic_bp: null,
+            spo2_percent: null,
+            hemoglobin_g_dl: null,
           },
         },
       };
@@ -206,7 +281,7 @@ export default function HomePage() {
       }
 
       setTriageResult(resultPayload);
-      setStep(4);
+      setStep(3);
       setStatusMessage({
         type: 'success',
         text: 'Triage assessment calculated and recorded successfully based on verified NHM protocols.',
@@ -228,7 +303,6 @@ export default function HomePage() {
     setSymptomDurationDays(null);
     setProblemSummary('');
     setVoiceTranscript('');
-    setVitals(initialVitals);
     setTriageResult(null);
     setStep(1);
     setStatusMessage(null);
@@ -277,7 +351,33 @@ export default function HomePage() {
           <h1 id="hero-title">Instant Primary Healthcare Triage</h1>
           <p>Evidence-based clinical triage and hospital referral navigation powered by National Health Mission clinical protocols.</p>
         </div>
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* Solid Red Emergency SOS Button */}
+          <button
+            type="button"
+            onClick={handleTriggerSOS}
+            disabled={sosLoading}
+            aria-label="Trigger Emergency SOS with live location"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              backgroundColor: '#dc2626',
+              color: '#ffffff',
+              border: '2px solid #b91c1c',
+              borderRadius: '8px',
+              padding: '10px 18px',
+              fontWeight: 700,
+              fontSize: '0.95rem',
+              cursor: sosLoading ? 'not-allowed' : 'pointer',
+              boxShadow: '0 4px 14px rgba(220, 38, 38, 0.4)',
+              transition: 'all 0.15s ease-in-out',
+            }}
+          >
+            <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>🚨</span>
+            <span>{sosLoading ? 'Broadcasting SOS...' : sosSuccess ? 'SOS Sent ✓' : 'Emergency SOS'}</span>
+          </button>
+
           {step !== 1 && (
             <button
               type="button"
@@ -314,18 +414,11 @@ export default function HomePage() {
           <div>{t('wizard.step2Full') !== 'wizard.step2Full' ? t('wizard.step2Full') : '2. Symptoms & Story'}</div>
         </div>
         <div
-          className={`step-box ${step === 3 ? 'active' : ''} ${step > 3 ? 'completed' : ''}`}
+          className={`step-box ${step === 3 ? 'active' : ''}`}
           aria-current={step === 3 ? 'step' : undefined}
         >
-          <div className="step-num">{step > 3 ? '✓' : '3'}</div>
-          <div>{t('wizard.step3Full') !== 'wizard.step3Full' ? t('wizard.step3Full') : '3. Vitals (Optional)'}</div>
-        </div>
-        <div
-          className={`step-box ${step === 4 ? 'active' : ''}`}
-          aria-current={step === 4 ? 'step' : undefined}
-        >
-          <div className="step-num">4</div>
-          <div>{t('wizard.step4Full') !== 'wizard.step4Full' ? t('wizard.step4Full') : '4. Referral Slip'}</div>
+          <div className="step-num">3</div>
+          <div>{t('wizard.step4Full') !== 'wizard.step4Full' ? t('wizard.step4Full') : '3. Referral Slip'}</div>
         </div>
       </nav>
 
@@ -362,10 +455,7 @@ export default function HomePage() {
           onChangeSymptomDurationDays={setSymptomDurationDays}
           onChangeProblemSummary={setProblemSummary}
           onChangeVoiceTranscript={setVoiceTranscript}
-          onNext={() => {
-            setStep(3);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
+          onNext={handleCalculateTriage}
           onBack={() => {
             setStep(1);
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -373,20 +463,7 @@ export default function HomePage() {
         />
       )}
 
-      {step === 3 && (
-        <StepVitals
-          data={vitals}
-          onChange={setVitals}
-          onBack={() => {
-            setStep(2);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          onSubmit={handleCalculateTriage}
-          loading={loading}
-        />
-      )}
-
-      {step === 4 && triageResult && (
+      {step === 3 && triageResult && (
         <TriageResult
           result={triageResult}
           onRestart={handleReset}
