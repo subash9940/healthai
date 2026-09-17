@@ -219,6 +219,16 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     facility_level_sdh: "Sub-District Hospital (SDH)",
     facility_level_dh: "District Hospital (DH)",
     facility_filter_all: "All Facilities",
+
+    // Facility Selection
+    select_facility_title: "Select Referral Facility",
+    select_facility_subtitle: "Choose target facility based on beds, distance, and patient transport",
+    facility_distance_label: "Distance: {dist} km",
+    facility_beds_available: "{count} Beds",
+    facility_selected_badge: "Selected",
+    facility_auto_recommended: "Recommended",
+    facility_no_facilities_found: "No matching facilities found",
+    facility_contact_phone: "Contact: {phone}",
   },
 
   hi: {
@@ -400,6 +410,16 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     facility_level_sdh: "उप-जिला अस्पताल (SDH)",
     facility_level_dh: "जिला अस्पताल (DH)",
     facility_filter_all: "सभी अस्पताल",
+
+    // Facility Selection
+    select_facility_title: "रेफरल अस्पताल चुनें",
+    select_facility_subtitle: "बेड, दूरी और मरीज की सुविधा के अनुसार अस्पताल चुनें",
+    facility_distance_label: "दूरी: {dist} किमी",
+    facility_beds_available: "{count} बेड उपलब्ध",
+    facility_selected_badge: "चयनित",
+    facility_auto_recommended: "अनुशंसित",
+    facility_no_facilities_found: "कोई अस्पताल उपलब्ध नहीं",
+    facility_contact_phone: "संपर्क: {phone}",
   },
 
   ta: {
@@ -581,6 +601,16 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     facility_level_sdh: "துணை மாவட்ட மருத்துவமனை (SDH)",
     facility_level_dh: "மாவட்ட தலைமை மருத்துவமனை (DH)",
     facility_filter_all: "அனைத்து மருத்துவமனைகளும்",
+
+    // Facility Selection
+    select_facility_title: "பரிந்துரை மருத்துவமனையைத் தேர்ந்தெடுக்கவும்",
+    select_facility_subtitle: "படுக்கை இருப்பு, தொலைவு மற்றும் வாகன வசதிக்கு ஏற்ப மருத்துவமனையைத் தேர்வு செய்யவும்",
+    facility_distance_label: "தொலைவு: {dist} கி.மீ",
+    facility_beds_available: "{count} படுக்கைகள்",
+    facility_selected_badge: "தேர்ந்தெடுக்கப்பட்டது",
+    facility_auto_recommended: "பரிந்துரைக்கப்பட்டது",
+    facility_no_facilities_found: "மருத்துவமனைகள் கிடைக்கவில்லை",
+    facility_contact_phone: "தொடர்பு: {phone}",
   },
 
   mr: {
@@ -771,5 +801,15 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     facility_level_sdh: "उपजिल्हा रुग्णालय (SDH)",
     facility_level_dh: "जिल्हा रुग्णालय (DH)",
     facility_filter_all: "सर्व रुग्णालये",
+
+    // Facility Selection
+    select_facility_title: "रेफरल रुग्णालय निवडा",
+    select_facility_subtitle: "खाटांची उपलब्धता, अंतर आणि वाहतुकीनुसार रुग्णालय निवडा",
+    facility_distance_label: "अंतर: {dist} किमी",
+    facility_beds_available: "{count} खाटा उपलब्ध",
+    facility_selected_badge: "निवडलेले",
+    facility_auto_recommended: "शिफारस केलेले",
+    facility_no_facilities_found: "कोणतेही रुग्णालय उपलब्ध नाही",
+    facility_contact_phone: "संपर्क: {phone}",
   },
 };

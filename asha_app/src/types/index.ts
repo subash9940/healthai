@@ -20,6 +20,8 @@ export interface FacilityAvailabilityItem {
   operational_status: FacilityOperationalStatus;
   available_beds: number;
   status_note?: string | null;
+  contact_phone?: string | null;
+  distance_km?: number | null;
   updated_at?: string | null;
   district?: string | null;
 }
@@ -90,6 +92,8 @@ export interface ReferralRecord {
   patient_sex: Sex;
   urgency: Urgency;
   target_facility: FacilityLevel;
+  facility_id?: string | null;
+  facility_name?: string | null;
   status: ReferralStatus;
   status_history: {
     status: ReferralStatus;
