@@ -18,6 +18,7 @@ interface ExtractorResult {
     respiratory_rate?: number | null;
     spo2_percent?: number | null;
   };
+  duration_days?: number | null;
   _source: "deterministic_edge_nlp_matcher";
 }
 
@@ -345,9 +346,45 @@ export function extractSymptomsLocal(transcript: string, _lang: string = "en"): 
     }
   }
 
+  // Parse duration mentioned in transcript (days)
+  let duration_days: number | null = null;
+  const numberWords: Record<string, number> = {
+    one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+    a: 1, an: 1,
+    "एक": 1, "दो": 2, "तीन": 3, "चार": 4, "पांच": 5, "पाँच": 5, "छह": 6, "सात": 7, "आठ": 8, "नौ": 9, "दस": 10,
+    "दोन": 2, "पाच": 5, "सहा": 6, "नऊ": 9, "दहा": 10,
+    "ஒரு": 1, "ஒன்று": 1, "இரண்டு": 2, "ரெண்டு": 2, "மூன்று": 3, "மூணு": 3, "நான்கு": 4, "நாலு": 4,
+    "ஐந்து": 5, "அஞ்சு": 5, "ஆறு": 6, "ஏழு": 7, "எட்டு": 8, "ஒன்பது": 9, "பத்து": 10,
+  };
+
+  const numPattern = "(\\d+|" + Object.keys(numberWords).join("|") + ")";
+
+  if (/(?:^|\s)(?:today|since\s+morning|just\s+started|आज|आज\s*से|आजपासून|सकाळपासून|இன்று|இன்னைக்கு|இன்னிக்கு|காலையிலிருந்து)(?:$|\s|[.,!])/i.test(textLower)) {
+    duration_days = 0;
+  } else if (/(?:^|\s)(?:yesterday|since\s+yesterday|कल\s*से|कालपासून|काल\s*झाला|நேற்று|நேத்திலிருந்து|நேத்து)(?:$|\s|[.,!])/i.test(textLower)) {
+    duration_days = 1;
+  } else {
+    const weekRegex = new RegExp(numPattern + "\\s*(?:weeks?|हफ्ते|आठवडे|வாரம்|வாரமாக)", "i");
+    const weekMatch = textLower.match(weekRegex);
+    if (weekMatch) {
+      const valStr = weekMatch[1];
+      const num = /^\d+$/.test(valStr) ? parseInt(valStr, 10) : numberWords[valStr] || 1;
+      duration_days = num * 7;
+    } else {
+      const dayRegex = new RegExp(numPattern + "\\s*(?:-|to)?\\s*(?:\\d+)?\\s*(?:days?|दिन|दिवस|दिवसांपासून|நாட்கள்|நாளாக|நாளா)", "i");
+      const dayMatch = textLower.match(dayRegex);
+      if (dayMatch) {
+        const valStr = dayMatch[1];
+        const num = /^\d+$/.test(valStr) ? parseInt(valStr, 10) : numberWords[valStr] || 1;
+        duration_days = num;
+      }
+    }
+  }
+
   return {
     symptoms: Array.from(matchedSymptoms),
     vitals_mentioned: vitals,
+    duration_days,
     _source: "deterministic_edge_nlp_matcher",
   };
 }

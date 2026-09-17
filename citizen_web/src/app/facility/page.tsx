@@ -25,6 +25,15 @@ interface FacilityStatus {
   updated_by_staff_name?: string | null;
 }
 
+interface SOSAlertItem {
+  id: string;
+  latitude: number | null;
+  longitude: number | null;
+  patient_context: Record<string, any>;
+  status: 'active' | 'acknowledged' | 'resolved' | string;
+  created_at: string;
+}
+
 interface ReferralItem {
   id: string;
   triage_record_id: string;
@@ -124,6 +133,11 @@ export default function FacilityDashboard() {
   const [actionMessage, setActionMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // SOS Alerts state
+  const [sosAlerts, setSosAlerts] = useState<SOSAlertItem[]>([]);
+  const [loadingSos, setLoadingSos] = useState(false);
+  const [ackingSosId, setAckingSosId] = useState<string | null>(null);
+
   // Facility Operational Status & Bed Capacity state
   const [facilityStatus, setFacilityStatus] = useState<FacilityStatus | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
@@ -214,13 +228,69 @@ export default function FacilityDashboard() {
     }
   }, []);
 
-  // When token is set, fetch queue & facility status
+  // Fetch active SOS alerts
+  const fetchSosAlerts = useCallback(async (authToken: string) => {
+    setLoadingSos(true);
+    try {
+      const res = await fetch('/api/facility/sos-alerts?status=active', {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.items)) {
+          setSosAlerts(data.items);
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingSos(false);
+    }
+  }, []);
+
+  // Acknowledge SOS Alert
+  const handleAcknowledgeSos = async (alertId: string) => {
+    if (!token) return;
+    setAckingSosId(alertId);
+    try {
+      const res = await fetch(`/api/facility/sos-alerts/${alertId}/acknowledge`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (res.ok) {
+        setSosAlerts((prev) => prev.filter((a) => a.id !== alertId));
+        setActionMessage({ text: '✓ Emergency SOS acknowledged and marked as responded.', type: 'success' });
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setActionMessage({ text: `Failed to acknowledge SOS: ${errData.error || 'Server error'}`, type: 'error' });
+      }
+    } catch (err: any) {
+      setActionMessage({ text: `Failed to acknowledge SOS: ${err?.message}`, type: 'error' });
+    } finally {
+      setAckingSosId(null);
+    }
+  };
+
+  // When token is set, fetch queue & facility status & SOS alerts with interval polling
   useEffect(() => {
     if (token) {
       fetchReferrals(token);
       fetchFacilityStatus(token);
+      fetchSosAlerts(token);
+
+      const interval = setInterval(() => {
+        fetchReferrals(token);
+        fetchSosAlerts(token);
+      }, 10000);
+
+      return () => clearInterval(interval);
     }
-  }, [token, fetchReferrals, fetchFacilityStatus]);
+  }, [token, fetchReferrals, fetchFacilityStatus, fetchSosAlerts]);
 
   const handleUpdateFacilityStatus = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -680,10 +750,11 @@ export default function FacilityDashboard() {
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>
                   Quick Staff Select (Demo Logins)
                 </label>
-                <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', paddingBottom: '4px' }}>
                   {[
-                    { label: 'Dr. Sharma (MO)', phone: '9876543210', pin: '1234' },
-                    { label: 'Sister Anita (Staff)', phone: '9876543211', pin: '1234' },
+                    { label: 'Dr. Sharma (PHC Shirur)', phone: '9876543210', pin: '1234' },
+                    { label: 'Dr. Priya (CHC Haveli)', phone: '9876543202', pin: '1234' },
+                    { label: 'Sister Anita (PHC Staff)', phone: '9876543211', pin: '1234' },
                     { label: 'Admin Patil (Super)', phone: '9876543212', pin: '1234' },
                   ].map((p) => (
                     <button
@@ -1137,6 +1208,106 @@ export default function FacilityDashboard() {
             </form>
           )}
         </div>
+
+        {/* Active Emergency SOS Alerts Banner */}
+        {sosAlerts.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex h-3 w-3 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+                </span>
+                <h2 className="text-xs font-black uppercase tracking-wider text-red-700">
+                  🚨 Active Emergency SOS Broadcasts ({sosAlerts.length})
+                </h2>
+              </div>
+              <span className="text-[11px] text-red-600 font-medium">Immediate Response Required</span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2.5">
+              {sosAlerts.map((sos) => (
+                <div
+                  key={sos.id}
+                  className="bg-red-50 border-2 border-red-500 rounded-[2px] p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 animate-pulse-subtle"
+                >
+                  <div className="space-y-1.5 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-black uppercase tracking-wider rounded-[2px]">
+                        CRITICAL SOS
+                      </span>
+                      <span className="text-xs font-bold text-red-900">
+                        {sos.patient_context?.patient_name || 'Anonymous Citizen / Emergency Caller'}
+                      </span>
+                      {sos.patient_context?.patient_phone && (
+                        <span className="text-xs font-mono text-red-700 font-semibold">
+                          📞 {sos.patient_context.patient_phone}
+                        </span>
+                      )}
+                      <span className="text-[11px] text-slate-500 font-mono ml-auto">
+                        {new Date(sos.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-slate-700">
+                      {sos.patient_context?.symptoms && Array.isArray(sos.patient_context.symptoms) && (
+                        <span className="mr-3">
+                          <strong className="text-slate-900">Symptoms:</strong> {sos.patient_context.symptoms.join(', ')}
+                        </span>
+                      )}
+                      {sos.patient_context?.chief_complaint && (
+                        <span className="mr-3">
+                          <strong className="text-slate-900">Complaint:</strong> {sos.patient_context.chief_complaint}
+                        </span>
+                      )}
+                      {sos.patient_context?.urgency && (
+                        <span className="mr-3 font-semibold text-red-800">
+                          <strong>Urgency:</strong> {sos.patient_context.urgency}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-xs text-slate-600 flex flex-wrap items-center gap-2">
+                      <span>
+                        <strong>GPS Coordinates:</strong>{' '}
+                        {sos.latitude !== null && sos.longitude !== null ? (
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${sos.latitude},${sos.longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-blue-700 underline hover:text-blue-900 font-bold"
+                          >
+                            📍 {sos.latitude.toFixed(5)}, {sos.longitude.toFixed(5)} (Open Map ↗)
+                          </a>
+                        ) : (
+                          <span className="text-amber-800 italic">Location unavailable (Citizen device GPS offline/denied)</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-start md:self-center">
+                    <button
+                      type="button"
+                      onClick={() => handleAcknowledgeSos(sos.id)}
+                      disabled={ackingSosId === sos.id}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase tracking-wider rounded-[2px] transition-colors shadow-sm disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                    >
+                      {ackingSosId === sos.id ? (
+                        'Acknowledging...'
+                      ) : (
+                        <>
+                          <span>✓</span>
+                          <span>Acknowledge SOS</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Global Action Messages */}
         {actionMessage && (

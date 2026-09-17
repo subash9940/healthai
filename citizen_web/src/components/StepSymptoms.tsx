@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useI18n, Language } from '../lib/useTranslation';
 import { SYMPTOM_DEFINITIONS, getSymptomName, extractSymptomsFromSpeech } from '../lib/symptomTranslations';
+import { extractSymptomsLocal } from '../lib/localExtractor';
 import { generateProblemSummary } from '../lib/problemSummary';
 
 interface Props {
@@ -179,11 +180,26 @@ export default function StepSymptoms({
         transcript = transcript.trim();
         onChangeVoiceTranscript(transcript);
 
-        // Smart Multilingual Symptom Extraction
+        // Smart Multilingual Symptom & Duration Extraction
         const extracted = extractSymptomsFromSpeech(transcript, language);
-        const combined = Array.from(new Set([...selectedSymptoms, ...extracted]));
+        const localParsed = extractSymptomsLocal(transcript, language);
+        const allExtractedSymptoms = Array.from(new Set([...extracted, ...(localParsed.symptoms || [])]));
+        const combined = Array.from(new Set([...selectedSymptoms, ...allExtractedSymptoms]));
         if (combined.length > selectedSymptoms.length) {
           onSelectSymptomList(combined);
+        }
+
+        // Auto-fill duration if extracted from speech and not manually overridden
+        if (localParsed.duration_days !== null && localParsed.duration_days !== undefined) {
+          const days = localParsed.duration_days;
+          // Map to nearest ICMR bucket (0, 2, 4, 6, 10)
+          let bucket = 0;
+          if (days <= 0) bucket = 0;
+          else if (days <= 2) bucket = 2;
+          else if (days <= 4) bucket = 4;
+          else if (days <= 7) bucket = 6;
+          else bucket = 10;
+          onChangeSymptomDurationDays(bucket);
         }
 
         // Generate comprehensive problem summary in the user's selected language
