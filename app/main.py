@@ -24,6 +24,7 @@ from app.schemas.triage import TriageRequest, TriageResponse
 from app.services.rules_engine import evaluate
 from app.symptom_vocab import SYMPTOM_KEYS, SYMPTOM_KEY_SET
 from app.facility_routes import router as facility_router
+from app.sync_routes import router as sync_router
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ app.add_middleware(
 )
 
 app.include_router(facility_router)
+app.include_router(sync_router)
 
 
 @app.post("/triage", response_model=TriageResponse)
