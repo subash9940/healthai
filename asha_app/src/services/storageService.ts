@@ -204,7 +204,7 @@ export const StorageService = {
       if (!target) return null;
 
       target.status = newStatus;
-      target.synced = false; // Flag for immediate sync with facility
+      // local-only, not authoritative, never synced
       target.status_history.push({
         status: newStatus,
         timestamp: new Date().toISOString(),
@@ -222,13 +222,11 @@ export const StorageService = {
   // --- Outbox Sync Count ---
   async getPendingSyncCount(): Promise<number> {
     try {
-      const [patients, referrals] = await Promise.all([
-        this.getAllPatientRecords(),
-        this.getAllReferrals(),
-      ]);
-      const unSyncedPatients = patients.filter((p) => !p.synced).length;
-      const unSyncedReferrals = referrals.filter((r) => !r.synced).length;
-      return unSyncedPatients + unSyncedReferrals;
+      const patients = await this.getAllPatientRecords();
+      const unSyncedPatients = patients.filter(
+        (p) => !p.synced && Boolean(p.record_id && p.record_id.trim())
+      ).length;
+      return unSyncedPatients;
     } catch {
       return 0;
     }

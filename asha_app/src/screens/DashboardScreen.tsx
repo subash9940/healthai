@@ -107,15 +107,20 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const handleTestSync = async () => {
     setIsTestingSync(true);
     try {
-      await SyncService.performSync();
+      const res = await SyncService.performSync();
       await loadDashboardData();
       setLastPingTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
-      Alert.alert(
-        "Sync Handshake Verified",
-        "Encrypted edge sync connection verified. All local records are in sync with the primary health cloud."
-      );
+      if (res.success) {
+        let msg = res.message;
+        if (res.mismatchesCount && res.mismatchesCount > 0) {
+          msg += `\n⚠️ Note: ${res.mismatchesCount} urgency classification update(s) from server.`;
+        }
+        Alert.alert("Sync Verified", msg);
+      } else {
+        Alert.alert("Sync Notice", res.message || "Currently operating in offline local mode.");
+      }
     } catch {
-      Alert.alert("Sync Offline", "Currently operating in 100% offline local SQLite mode.");
+      Alert.alert("Sync Offline", "Currently operating in 100% offline local mode.");
     } finally {
       setIsTestingSync(false);
     }
@@ -181,6 +186,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           created_at: new Date(Date.now() - 25 * 60000).toISOString(),
           synced: true,
           status_history: [],
+          is_demo: true,
         },
         {
           referral_id: "REF-DEMO-02",
@@ -196,6 +202,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           created_at: new Date(Date.now() - 70 * 60000).toISOString(),
           synced: true,
           status_history: [],
+          is_demo: true,
         },
         {
           referral_id: "REF-DEMO-03",
@@ -211,6 +218,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           created_at: new Date(Date.now() - 10 * 60000).toISOString(),
           synced: false,
           status_history: [],
+          is_demo: true,
         },
       ];
 

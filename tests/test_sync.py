@@ -2,18 +2,24 @@
 tests/test_sync.py
 
 Integration tests for /health and /sync endpoints against jeevanya_test DB.
-Verifies all 7 sync requirements:
-1. test_health
-2. test_sync_single_record
-3. test_sync_idempotency
-4. test_sync_urgency_mismatch
-5. test_sync_partial_failure
-6. test_sync_patient_linking_by_phone
-7. test_sync_demo_referral_ignored
+Verifies all backend sync requirements (B1–B6):
+1. test_health_ok & test_health_db_down (B1: active DB probe returning 200 / 503)
+2. test_sync_missing_record_id (B2: reject missing record_id, 0 rows, 1 error)
+3. test_sync_batch_limit_101 (B3: max_length=100 returning 422)
+4. test_sync_unconfirmed_referral (B4: standalone referral not in DB -> unconfirmed_referrals)
+5. test_sync_patient_dedup_different_names (B5: same phone, different names -> 2 rows)
+6. test_sync_patient_dedup_same_name_sex (B5: same phone, same name & sex -> 1 row)
+7. test_sync_single_record (Full triage evaluation & insertion)
+8. test_sync_idempotency (Duplicate submission idempotency)
+9. test_sync_urgency_mismatch (Client vs server urgency mismatch tracking)
+10. test_sync_partial_failure (Resilience on corrupted records)
+11. test_sync_demo_referral_ignored (Ignore demo referrals)
 """
 
 import os
+import urllib.parse
 import uuid
+from unittest.mock import patch, MagicMock
 import pytest
 import httpx
 import asyncpg
@@ -22,6 +28,12 @@ from dotenv import load_dotenv
 # Ensure test DB is targeted before importing app modules
 os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL", "postgresql://subash@/jeevanya_test")
 load_dotenv()
+
+# Safety assertion (B6): Target database name MUST end with _test
+db_url = os.environ.get("DATABASE_URL", "")
+parsed = urllib.parse.urlparse(db_url)
+db_name = parsed.path.lstrip("/")
+assert db_name.endswith("_test"), f"Safety assertion failed: Database '{db_name}' does not end with '_test'"
 
 from app.main import app
 from app.db import init_pool, close_pool, get_pool
@@ -42,17 +54,255 @@ async def setup_test_db():
 
 
 @pytest.mark.asyncio
-async def test_health():
-    """1. GET /health returns 200 {'status': 'ok'}."""
+async def test_health_ok():
+    """B1. GET /health returns 200 {'status': 'ok', 'db': 'ok'} when DB probe succeeds."""
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/health")
         assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        assert response.json() == {"status": "ok", "db": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_health_db_down():
+    """B1. GET /health returns 503 {'status': 'degraded', 'db': 'down'} when DB probe fails."""
+    mock_pool = MagicMock()
+    mock_pool.acquire.side_effect = Exception("Connection refused")
+    app.dependency_overrides[get_pool] = lambda: mock_pool
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/health")
+            assert response.status_code == 503
+            assert response.json() == {"status": "degraded", "db": "down"}
+    finally:
+        app.dependency_overrides.pop(get_pool, None)
+
+
+@pytest.mark.asyncio
+async def test_sync_missing_record_id():
+    """B2. Missing/null/empty record_id is rejected with 0 rows inserted and 1 error returned."""
+    client_pat_id = str(uuid.uuid4())
+    payload = {
+        "patients": [
+            {
+                "record_id": None,  # Missing record_id
+                "patient": {
+                    "patient_id": client_pat_id,
+                    "patient_display_name": "No Record ID Patient",
+                    "patient_age_years": 25.0,
+                    "patient_sex": "female",
+                    "mobile": "9876543210",
+                },
+                "symptoms": ["cough"],
+                "triage": {
+                    "urgency": "low",
+                },
+            }
+        ],
+        "referrals": [],
+    }
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/sync", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert data["total_synced"] == 0
+        assert data["total_errors"] == 1
+        assert len(data["errors"]) == 1
+        assert data["errors"][0]["error"] == "missing record_id"
+        assert data["errors"][0]["client_patient_id"] == client_pat_id
+
+        # Verify 0 rows in DB
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            pat_count = await conn.fetchval("SELECT count(*) FROM patients WHERE client_patient_id = $1", client_pat_id)
+            assert pat_count == 0
+            triage_count = await conn.fetchval("SELECT count(*) FROM triage_records")
+            assert triage_count == 0
+
+
+@pytest.mark.asyncio
+async def test_sync_batch_limit_101():
+    """B3. Payload with 101 records exceeds max_length=100 and returns HTTP 422."""
+    records = []
+    for _ in range(101):
+        records.append({
+            "record_id": str(uuid.uuid4()),
+            "patient": {
+                "patient_id": str(uuid.uuid4()),
+                "patient_display_name": "Batch Patient",
+                "patient_age_years": 30.0,
+                "patient_sex": "male",
+            },
+            "symptoms": ["fever"],
+            "triage": {"urgency": "medium"},
+        })
+
+    payload = {"patients": records}
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/sync", json=payload)
+        assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_sync_unconfirmed_referral():
+    """B4. Standalone referral not found in DB is placed into unconfirmed_referrals."""
+    missing_ref_id = str(uuid.uuid4())
+    payload = {
+        "patients": [],
+        "referrals": [
+            {
+                "referral_id": missing_ref_id,
+                "patient_id": str(uuid.uuid4()),
+                "status": "in_transit",
+                "is_demo": False,
+            }
+        ],
+    }
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/sync", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert len(data["unconfirmed_referrals"]) == 1
+        assert data["unconfirmed_referrals"][0]["client_ref_id"] == missing_ref_id
+        assert "not found in database" in data["unconfirmed_referrals"][0]["reason"]
+        assert len(data["errors"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_sync_patient_dedup_different_names():
+    """B5. Same phone number with different patient names creates 2 distinct patient rows in DB."""
+    phone = "9876500010"
+    rec1_id = str(uuid.uuid4())
+    pat1_id = str(uuid.uuid4())
+    rec2_id = str(uuid.uuid4())
+    pat2_id = str(uuid.uuid4())
+
+    payload1 = {
+        "patients": [
+            {
+                "record_id": rec1_id,
+                "patient": {
+                    "patient_id": pat1_id,
+                    "patient_display_name": "Aarav Sharma",
+                    "patient_village": "Village A",
+                    "mobile": phone,
+                    "patient_age_years": 25.0,
+                    "patient_sex": "male",
+                },
+                "symptoms": ["fever"],
+                "triage": {"urgency": "medium"},
+            }
+        ]
+    }
+
+    payload2 = {
+        "patients": [
+            {
+                "record_id": rec2_id,
+                "patient": {
+                    "patient_id": pat2_id,
+                    "patient_display_name": "Sunita Sharma",  # Different family member on same phone
+                    "patient_village": "Village A",
+                    "mobile": phone,
+                    "patient_age_years": 22.0,
+                    "patient_sex": "female",
+                },
+                "symptoms": ["cough"],
+                "triage": {"urgency": "low"},
+            }
+        ]
+    }
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        res1 = await client.post("/sync", json=payload1)
+        assert res1.status_code == 200
+        db_pat_id_1 = res1.json()["synced_patients"][0]["patient_id"]
+
+        res2 = await client.post("/sync", json=payload2)
+        assert res2.status_code == 200
+        db_pat_id_2 = res2.json()["synced_patients"][0]["patient_id"]
+
+        # Distinct patient IDs for different family members sharing the phone
+        assert db_pat_id_1 != db_pat_id_2
+
+        # Verify DB has 2 distinct rows
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            count = await conn.fetchval("SELECT count(*) FROM patients WHERE phone = $1", phone)
+            assert count == 2
+
+
+@pytest.mark.asyncio
+async def test_sync_patient_dedup_same_name_sex():
+    """B5. Same phone number with matching normalized name and sex links to 1 patient row in DB."""
+    phone = "9876500020"
+    rec1_id = str(uuid.uuid4())
+    pat1_id = str(uuid.uuid4())
+    rec2_id = str(uuid.uuid4())
+    pat2_id = str(uuid.uuid4())  # Different client patient ID for same patient
+
+    payload1 = {
+        "patients": [
+            {
+                "record_id": rec1_id,
+                "patient": {
+                    "patient_id": pat1_id,
+                    "patient_display_name": "  Geeta Bai  ",
+                    "patient_village": "Village B",
+                    "mobile": phone,
+                    "patient_age_years": 45.0,
+                    "patient_sex": "female",
+                },
+                "symptoms": ["fever"],
+                "triage": {"urgency": "medium"},
+            }
+        ]
+    }
+
+    payload2 = {
+        "patients": [
+            {
+                "record_id": rec2_id,
+                "patient": {
+                    "patient_id": pat2_id,
+                    "patient_display_name": "geeta bai",  # Normalized match
+                    "patient_village": "Village B",
+                    "mobile": phone,
+                    "patient_age_years": 45.0,
+                    "patient_sex": "female",
+                },
+                "symptoms": ["cough"],
+                "triage": {"urgency": "low"},
+            }
+        ]
+    }
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        res1 = await client.post("/sync", json=payload1)
+        assert res1.status_code == 200
+        db_pat_id_1 = res1.json()["synced_patients"][0]["patient_id"]
+
+        res2 = await client.post("/sync", json=payload2)
+        assert res2.status_code == 200
+        db_pat_id_2 = res2.json()["synced_patients"][0]["patient_id"]
+
+        # Same patient row reused
+        assert db_pat_id_1 == db_pat_id_2
+
+        # Verify DB has exactly 1 patient row
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            count = await conn.fetchval("SELECT count(*) FROM patients WHERE phone = $1", phone)
+            assert count == 1
 
 
 @pytest.mark.asyncio
 async def test_sync_single_record():
-    """2. POST /sync with 1 patient record inserts patient and triage_record and evaluates urgency."""
+    """Full triage evaluation & insertion."""
     client_rec_id = str(uuid.uuid4())
     client_pat_id = str(uuid.uuid4())
 
@@ -114,7 +364,7 @@ async def test_sync_single_record():
 
 @pytest.mark.asyncio
 async def test_sync_idempotency():
-    """3. POST the same payload twice returns same IDs and does not duplicate DB rows."""
+    """POST the same payload twice returns same IDs and does not duplicate DB rows."""
     client_rec_id = str(uuid.uuid4())
     client_pat_id = str(uuid.uuid4())
 
@@ -176,11 +426,10 @@ async def test_sync_idempotency():
 
 @pytest.mark.asyncio
 async def test_sync_urgency_mismatch():
-    """4. Detect and record urgency mismatch when client claimed urgency differs from server evaluated urgency."""
+    """Detect and record urgency mismatch when client claimed urgency differs from server evaluated urgency."""
     client_rec_id = str(uuid.uuid4())
     client_pat_id = str(uuid.uuid4())
 
-    # Client claims "low", but chest_pain for adult is "emergency"
     payload = {
         "patients": [
             {
@@ -226,125 +475,11 @@ async def test_sync_urgency_mismatch():
 
 @pytest.mark.asyncio
 async def test_sync_partial_failure():
-    """5. Verify partial batch failure resilience: valid record succeeds while invalid records generate errors."""
+    """Verify partial batch failure resilience: valid record succeeds while failing record is logged."""
     valid_rec_id = str(uuid.uuid4())
     valid_pat_id = str(uuid.uuid4())
-    invalid_rec_id = str(uuid.uuid4())
-    invalid_pat_id = str(uuid.uuid4())
 
-    payload = {
-        "patients": [
-            {
-                "record_id": valid_rec_id,
-                "patient": {
-                    "patient_id": valid_pat_id,
-                    "patient_display_name": "Valid Patient",
-                    "patient_age_years": 30.0,
-                    "patient_sex": "female",
-                    "mobile": "9876543213",
-                },
-                "symptoms": ["cough"],
-                "triage": {
-                    "urgency": "low",
-                },
-            },
-            {
-                # Corrupted record: patient_age_years is 30 but symptom evaluation with invalid symptom types or DB error trigger
-                "record_id": invalid_rec_id,
-                "patient": {
-                    "patient_id": invalid_pat_id,
-                    "patient_display_name": "Invalid Record",
-                    "patient_age_years": 25.0,
-                    "patient_sex": "male",
-                    # A non-sanitizable or mock error condition:
-                    # Let's test handling by introducing duplicate client_patient_id with a non-matching unresolvable conflict or simulating DB failure
-                    "mobile": "9876543214",
-                },
-                # Passing symptoms that might trigger error if we pass something invalid, or we test DB rollback
-                "symptoms": None,  # None will fail serialization or evaluate
-                "triage": {
-                    "urgency": "low",
-                },
-            }
-        ]
-    }
-
-    # If symptoms=None triggers Pydantic ValidationError or internal exception during processing
-    # Let's construct a payload that passes Pydantic schema validation for the request but causes a processing error in the loop
-    # In SyncPatientRecord, symptoms default is list, but if we pass an invalid symptom item or if we test per-record failure:
-    payload_valid_pydantic = {
-        "patients": [
-            {
-                "record_id": valid_rec_id,
-                "patient": {
-                    "patient_id": valid_pat_id,
-                    "patient_display_name": "Valid Patient",
-                    "patient_age_years": 30.0,
-                    "patient_sex": "female",
-                    "mobile": "9876543213",
-                },
-                "symptoms": ["cough"],
-                "triage": {
-                    "urgency": "low",
-                },
-            },
-            {
-                "record_id": invalid_rec_id,
-                "patient": {
-                    "patient_id": invalid_pat_id,
-                    "patient_display_name": "Error Patient",
-                    "patient_age_years": 25.0,
-                    "patient_sex": "male",
-                    "mobile": "9876543214",
-                },
-                # Let's pass invalid symptom duration that would fail or test error branch
-                "symptoms": ["unknown_symptom_key"],
-                "symptom_duration_days": -1,  # schema validator will catch if validated, so let's check
-                "triage": {
-                    "urgency": "low",
-                },
-            }
-        ]
-    }
-
-    # Let's test with a mock error or DB constraint:
-    # First insert a patient with client_patient_id = 'BLOCKED_PATIENT'
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute("INSERT INTO patients (display_name, age_years, sex, client_patient_id) VALUES ('Blocked', 20, 'male', $1)", invalid_pat_id)
-        # Now drop its ability to insert by creating a trigger or inserting duplicate key when not handled
-        # Actually in sync_routes.py, if db_patient_id is found by client_pat_id, it reuses it.
-        # But if we pass client_rec_id that already exists with different constraint, or if we pass a record that raises in evaluate:
-        # What if symptoms contains None or an unhashable type inside list: e.g. ["cough", None]? Pydantic allows List[str].
-
-    # Alternatively, let's create a test case where evaluate or DB insert raises an exception for record 2
-    # For instance, patient_age_years is 30.0 for record 1, and for record 2 we simulate an error during transaction
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        # Let's send 1 valid patient
-        res = await client.post("/sync", json={
-            "patients": [
-                {
-                    "record_id": valid_rec_id,
-                    "patient": {
-                        "patient_id": valid_pat_id,
-                        "patient_display_name": "Valid Patient",
-                        "patient_age_years": 30.0,
-                        "patient_sex": "female",
-                        "mobile": "9876543213",
-                    },
-                    "symptoms": ["cough"],
-                    "triage": {
-                        "urgency": "low",
-                    },
-                }
-            ]
-        })
-        assert res.status_code == 200
-        assert res.json()["success"] is True
-
-        # Now test partial failure by patching or sending a record where DB insert fails
-        # Let's test with a mock/patched failure on one record:
-        from unittest.mock import patch
         from app.services.rules_engine import evaluate as orig_evaluate
 
         def mock_evaluate(req):
@@ -356,9 +491,9 @@ async def test_sync_partial_failure():
             batch_payload = {
                 "patients": [
                     {
-                        "record_id": str(uuid.uuid4()),
+                        "record_id": valid_rec_id,
                         "patient": {
-                            "patient_id": str(uuid.uuid4()),
+                            "patient_id": valid_pat_id,
                             "patient_display_name": "Valid Batch Patient",
                             "patient_age_years": 22.0,
                             "patient_sex": "male",
@@ -391,77 +526,8 @@ async def test_sync_partial_failure():
 
 
 @pytest.mark.asyncio
-async def test_sync_patient_linking_by_phone():
-    """6. Two records with same phone number link to the same patient row in DB."""
-    phone = "9876500001"
-    rec1_id = str(uuid.uuid4())
-    pat1_id = str(uuid.uuid4())
-    rec2_id = str(uuid.uuid4())
-    pat2_id = str(uuid.uuid4())
-
-    payload1 = {
-        "patients": [
-            {
-                "record_id": rec1_id,
-                "patient": {
-                    "patient_id": pat1_id,
-                    "patient_display_name": "Geeta Bai",
-                    "patient_village": "Village A",
-                    "mobile": phone,
-                    "patient_age_years": 40.0,
-                    "patient_sex": "female",
-                },
-                "symptoms": ["fever"],
-                "triage": {"urgency": "medium"},
-            }
-        ]
-    }
-
-    payload2 = {
-        "patients": [
-            {
-                "record_id": rec2_id,
-                "patient": {
-                    "patient_id": pat2_id,
-                    "patient_display_name": "Geeta Bai (Follow-up)",
-                    "patient_village": "Village A",
-                    "mobile": phone,
-                    "patient_age_years": 40.0,
-                    "patient_sex": "female",
-                },
-                "symptoms": ["cough"],
-                "triage": {"urgency": "low"},
-            }
-        ]
-    }
-
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        res1 = await client.post("/sync", json=payload1)
-        assert res1.status_code == 200
-        db_pat_id_1 = res1.json()["synced_patients"][0]["patient_id"]
-
-        res2 = await client.post("/sync", json=payload2)
-        assert res2.status_code == 200
-        db_pat_id_2 = res2.json()["synced_patients"][0]["patient_id"]
-
-        # Both triage records must be linked to the EXACT same database patient ID
-        assert db_pat_id_1 == db_pat_id_2
-
-        # Verify in DB that only 1 patient exists with this phone
-        pool = get_pool()
-        async with pool.acquire() as conn:
-            count = await conn.fetchval("SELECT count(*) FROM patients WHERE phone = $1", phone)
-            assert count == 1
-
-            triage_pat_ids = await conn.fetch("SELECT patient_id FROM triage_records WHERE client_record_id = ANY($1)", [rec1_id, rec2_id])
-            assert len(triage_pat_ids) == 2
-            assert str(triage_pat_ids[0]["patient_id"]) == str(db_pat_id_1)
-            assert str(triage_pat_ids[1]["patient_id"]) == str(db_pat_id_1)
-
-
-@pytest.mark.asyncio
 async def test_sync_demo_referral_ignored():
-    """7. Standalone referrals with is_demo: true or REF-DEMO- prefix are ignored."""
+    """Standalone referrals with is_demo: true or REF-DEMO- prefix are ignored."""
     payload = {
         "patients": [],
         "referrals": [

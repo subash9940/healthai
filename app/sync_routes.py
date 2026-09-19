@@ -13,6 +13,7 @@ from typing import Any, Optional
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from app.db import get_pool
@@ -21,6 +22,7 @@ from app.schemas.sync import (
     SyncResponse,
     SyncedPatientItem,
     SyncedReferralItem,
+    UnconfirmedReferralItem,
     SyncErrorItem,
 )
 from app.schemas.triage import TriageRequest, Urgency, Sex
@@ -43,9 +45,18 @@ def _to_jsonb(value: Any) -> str:
 
 
 @router.get("/health")
-async def health():
-    """Simple healthcheck for mobile sync connectivity check."""
-    return {"status": "ok"}
+async def health(pool: asyncpg.Pool = Depends(get_pool)):
+    """Active healthcheck with database probe."""
+    try:
+        async with pool.acquire() as conn:
+            await conn.fetchval("SELECT 1")
+        return {"status": "ok", "db": "ok"}
+    except Exception as e:
+        logger.warning("Database health probe failed: %s", e)
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "db": "down"},
+        )
 
 
 @router.post("/sync", response_model=SyncResponse)
@@ -63,6 +74,7 @@ async def sync_records(
     """
     synced_patients: list[SyncedPatientItem] = []
     synced_referrals: list[SyncedReferralItem] = []
+    unconfirmed_referrals: list[UnconfirmedReferralItem] = []
     errors: list[SyncErrorItem] = []
     mismatches_count = 0
 
@@ -78,6 +90,16 @@ async def sync_records(
         for record in payload.patients:
             client_rec_id = record.record_id
             client_pat_id = record.patient.patient_id
+
+            if not client_rec_id or not client_rec_id.strip():
+                errors.append(
+                    SyncErrorItem(
+                        client_record_id=client_rec_id,
+                        client_patient_id=client_pat_id,
+                        error="missing record_id",
+                    )
+                )
+                continue
 
             try:
                 # Per-record transaction
@@ -147,7 +169,7 @@ async def sync_records(
                             server_urgency_val,
                         )
 
-                    # Patient Resolution (client_patient_id -> phone -> new insert)
+                    # Patient Resolution (client_patient_id -> phone+name+sex -> new insert)
                     db_patient_id: Optional[uuid.UUID] = None
 
                     # 1. Look up by client_patient_id
@@ -159,21 +181,35 @@ async def sync_records(
                         if pat_row:
                             db_patient_id = pat_row["id"]
 
-                    # 2. Look up by phone if not found
+                    # 2. Look up by phone if not found, requiring matching normalized display_name and sex
                     if not db_patient_id and record.patient.mobile:
-                        pat_row = await conn.fetchrow(
-                            "SELECT id FROM patients WHERE phone = $1 LIMIT 1",
-                            record.patient.mobile,
+                        norm_name = (
+                            record.patient.patient_display_name.strip().lower()
+                            if record.patient.patient_display_name
+                            else None
                         )
-                        if pat_row:
-                            db_patient_id = pat_row["id"]
-                            # Associate client_patient_id if not set
-                            if client_pat_id:
-                                await conn.execute(
-                                    "UPDATE patients SET client_patient_id = $1 WHERE id = $2 AND client_patient_id IS NULL",
-                                    client_pat_id,
-                                    db_patient_id,
-                                )
+                        if norm_name:
+                            pat_row = await conn.fetchrow(
+                                """
+                                SELECT id FROM patients
+                                WHERE phone = $1
+                                  AND LOWER(TRIM(display_name)) = $2
+                                  AND sex = $3
+                                LIMIT 1
+                                """,
+                                record.patient.mobile,
+                                norm_name,
+                                record.patient.patient_sex.value,
+                            )
+                            if pat_row:
+                                db_patient_id = pat_row["id"]
+                                # Associate client_patient_id if not set
+                                if client_pat_id:
+                                    await conn.execute(
+                                        "UPDATE patients SET client_patient_id = $1 WHERE id = $2 AND client_patient_id IS NULL",
+                                        client_pat_id,
+                                        db_patient_id,
+                                    )
 
                     # 3. Insert new patient if still not resolved
                     if not db_patient_id:
@@ -316,13 +352,28 @@ async def sync_records(
                                 status=str(existing_ref["state"]),
                             )
                         )
+                    else:
+                        unconfirmed_referrals.append(
+                            UnconfirmedReferralItem(
+                                client_ref_id=client_ref_id,
+                                reason=f"Referral {client_ref_id} not found in database",
+                            )
+                        )
                 except Exception as e:
                     logger.exception("Failed to check referral client_ref_id=%s: %s", client_ref_id, str(e))
+                    errors.append(
+                        SyncErrorItem(
+                            client_record_id=None,
+                            client_patient_id=ref.patient_id,
+                            error=f"Error checking referral {client_ref_id}: {str(e)}",
+                        )
+                    )
 
     return SyncResponse(
         success=len(errors) == 0,
         synced_patients=synced_patients,
         synced_referrals=synced_referrals,
+        unconfirmed_referrals=unconfirmed_referrals,
         errors=errors,
         total_synced=len(synced_patients) + len(synced_referrals),
         total_errors=len(errors),

@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { SafeAreaView, StyleSheet, StatusBar, View } from "react-native";
+import { SafeAreaView, StyleSheet, StatusBar, View, Alert } from "react-native";
 import { THEME } from "./src/constants/theme";
 import {
   Language,
@@ -93,9 +93,23 @@ export default function App() {
 
   const handleManualSync = async () => {
     setIsSyncing(true);
-    await SyncService.performSync();
-    await refreshSyncCount();
-    setIsSyncing(false);
+    try {
+      const res = await SyncService.performSync();
+      await refreshSyncCount();
+      if (!res.success) {
+        Alert.alert("Sync Notice", res.message || "Could not reach server. Records saved locally.");
+      } else if (res.syncedCount > 0) {
+        let msg = res.message;
+        if (res.mismatchesCount && res.mismatchesCount > 0) {
+          msg += `\n⚠️ Note: ${res.mismatchesCount} urgency classification update(s) from server.`;
+        }
+        Alert.alert("Sync Complete", msg);
+      }
+    } catch {
+      Alert.alert("Sync Notice", "Sync error occurred. Records remain safely stored locally.");
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // Screening Flow Handlers

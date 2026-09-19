@@ -102,6 +102,7 @@ export interface ReferralRecord {
   created_at: string;
   synced: boolean;
   asha_worker_id: string;
+  is_demo?: boolean;
 }
 
 export interface AshaWorkerSession {

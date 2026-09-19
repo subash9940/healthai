@@ -12,6 +12,9 @@ import { API_BASE_URL } from "../config";
 export interface SyncResult {
   success: boolean;
   syncedCount: number;
+  pendingCount?: number;
+  rejectedCount?: number;
+  legacyCount?: number;
   message: string;
   mismatchesCount?: number;
   errorsCount?: number;
@@ -26,14 +29,30 @@ export const SyncService = {
         StorageService.getAllReferrals(),
       ]);
 
-      const pendingPatients = patients.filter((p) => !p.synced);
-      const pendingReferrals = referrals.filter((r) => !r.synced);
+      const validPendingPatients = patients.filter(
+        (p) => !p.synced && Boolean(p.record_id && p.record_id.trim())
+      );
+      const legacyPatients = patients.filter(
+        (p) => !p.synced && (!p.record_id || !p.record_id.trim())
+      );
+      const legacyCount = legacyPatients.length;
 
-      if (pendingPatients.length === 0 && pendingReferrals.length === 0) {
+      const validPendingReferrals = referrals.filter(
+        (r) => !r.synced && !r.is_demo && !r.referral_id.startsWith("REF-DEMO")
+      );
+
+      const totalPending = validPendingPatients.length + validPendingReferrals.length;
+
+      if (totalPending === 0) {
         return {
           success: true,
           syncedCount: 0,
-          message: "All records are already synced.",
+          pendingCount: 0,
+          rejectedCount: 0,
+          legacyCount,
+          message: legacyCount > 0
+            ? `All valid records synced. ${legacyCount} legacy record(s) skipped.`
+            : "All records are already synced.",
         };
       }
 
@@ -59,6 +78,9 @@ export const SyncService = {
         return {
           success: false,
           syncedCount: 0,
+          pendingCount: totalPending,
+          rejectedCount: 0,
+          legacyCount,
           message: "Backend server unreachable. Records remain saved in local outbox.",
           error: err?.message || "Health check failed",
         };
@@ -68,13 +90,16 @@ export const SyncService = {
         return {
           success: false,
           syncedCount: 0,
+          pendingCount: totalPending,
+          rejectedCount: 0,
+          legacyCount,
           message: "Server health check failed. Records remain safely stored locally.",
         };
       }
 
       // Format payload for /sync endpoint
       const syncPayload = {
-        patients: pendingPatients.map((p) => ({
+        patients: validPendingPatients.map((p) => ({
           record_id: p.record_id,
           patient: p.patient,
           symptoms: p.symptoms,
@@ -83,7 +108,7 @@ export const SyncService = {
           created_at: p.created_at,
           asha_worker_id: p.asha_worker_id,
         })),
-        referrals: pendingReferrals.map((r) => ({
+        referrals: validPendingReferrals.map((r) => ({
           referral_id: r.referral_id,
           patient_id: r.patient_id,
           patient_name: r.patient_name,
@@ -119,6 +144,9 @@ export const SyncService = {
         return {
           success: false,
           syncedCount: 0,
+          pendingCount: totalPending,
+          rejectedCount: 0,
+          legacyCount,
           message: `Server returned error (${syncRes.status}). Records preserved locally.`,
           error: errText,
         };
@@ -140,10 +168,14 @@ export const SyncService = {
       const totalSynced = (data.synced_patients?.length || 0) + (data.synced_referrals?.length || 0);
       const totalErrors = data.total_errors || 0;
       const mismatchesCount = data.mismatches_count || 0;
+      const remainingPending = totalPending - totalSynced;
 
       return {
         success: data.success,
         syncedCount: totalSynced,
+        pendingCount: remainingPending > 0 ? remainingPending : 0,
+        rejectedCount: totalErrors,
+        legacyCount,
         errorsCount: totalErrors,
         mismatchesCount: mismatchesCount,
         message: data.success

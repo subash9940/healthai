@@ -87,7 +87,7 @@ class SyncReferralRecord(BaseModel):
 
 
 class SyncPayload(BaseModel):
-    patients: List[SyncPatientRecord] = Field(default_factory=list)
+    patients: List[SyncPatientRecord] = Field(default_factory=list, max_length=100)
     referrals: Optional[List[SyncReferralRecord]] = Field(default_factory=list)
     synced_at: Optional[str] = None
 
@@ -109,6 +109,11 @@ class SyncedReferralItem(BaseModel):
     status: str
 
 
+class UnconfirmedReferralItem(BaseModel):
+    client_ref_id: str
+    reason: str
+
+
 class SyncErrorItem(BaseModel):
     client_record_id: Optional[str] = None
     client_patient_id: Optional[str] = None
@@ -119,6 +124,7 @@ class SyncResponse(BaseModel):
     success: bool
     synced_patients: List[SyncedPatientItem] = Field(default_factory=list)
     synced_referrals: List[SyncedReferralItem] = Field(default_factory=list)
+    unconfirmed_referrals: List[UnconfirmedReferralItem] = Field(default_factory=list)
     errors: List[SyncErrorItem] = Field(default_factory=list)
     total_synced: int = 0
     total_errors: int = 0
