@@ -26,6 +26,7 @@ import {
 } from "../types";
 import { TouchButton } from "../components/TouchButton";
 import { StorageService } from "../services/storageService";
+import * as Crypto from "expo-crypto";
 
 interface TriageResultScreenProps {
   language: Language;
@@ -90,6 +91,7 @@ export const TriageResultScreen: React.FC<TriageResultScreenProps> = ({
   // Save record to local registry
   const saveLocalRecord = async (transitMarked = false) => {
     const record: PatientRecord = {
+      record_id: Crypto.randomUUID(),
       patient: demographics,
       symptoms,
       vitals,
@@ -103,7 +105,7 @@ export const TriageResultScreen: React.FC<TriageResultScreenProps> = ({
     // If requires referral, create referral record
     if (triageResult.requires_referral) {
       const referral: ReferralRecord = {
-        referral_id: "ref_" + Date.now().toString(36),
+        referral_id: Crypto.randomUUID(),
         patient_id: demographics.patient_id,
         patient_name: demographics.patient_display_name,
         patient_village: demographics.patient_village,

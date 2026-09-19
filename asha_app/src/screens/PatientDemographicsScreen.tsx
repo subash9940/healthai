@@ -19,6 +19,7 @@ import { THEME } from "../constants/theme";
 import { TRANSLATIONS } from "../constants/translations";
 import { Language, PatientDemographics, Sex } from "../types";
 import { TouchButton } from "../components/TouchButton";
+import * as Crypto from "expo-crypto";
 
 interface DemographicsScreenProps {
   language: Language;
@@ -85,7 +86,7 @@ export const PatientDemographicsScreen: React.FC<DemographicsScreenProps> = ({
     }
 
     const demographics: PatientDemographics = {
-      patient_id: "p_" + Date.now().toString(36),
+      patient_id: Crypto.randomUUID(),
       patient_display_name: name.trim(),
       patient_village: village.trim(),
       mobile: cleanPhone,

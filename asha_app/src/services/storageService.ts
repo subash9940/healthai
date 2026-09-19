@@ -159,7 +159,14 @@ export const StorageService = {
   async savePatientRecord(record: PatientRecord): Promise<void> {
     try {
       const existing = await this.getAllPatientRecords();
-      const updated = [record, ...existing.filter((r) => r.patient.patient_id !== record.patient.patient_id)];
+      const updated = [
+        record,
+        ...existing.filter((r) =>
+          record.record_id
+            ? r.record_id !== record.record_id
+            : r.patient.patient_id !== record.patient.patient_id
+        ),
+      ];
       await AsyncStorage.setItem(KEYS.PATIENT_RECORDS, JSON.stringify(updated));
     } catch (e) {
       console.error("Failed to save patient record locally:", e);
@@ -228,7 +235,7 @@ export const StorageService = {
   },
 
   // --- Mark Records Synced ---
-  async markRecordsAsSynced(patientIds: string[], referralIds: string[]): Promise<void> {
+  async markRecordsAsSynced(patientOrRecordIds: string[], referralIds: string[]): Promise<void> {
     try {
       const [patients, referrals] = await Promise.all([
         this.getAllPatientRecords(),
@@ -236,7 +243,7 @@ export const StorageService = {
       ]);
 
       const updatedPatients = patients.map((p) =>
-        patientIds.includes(p.patient.patient_id)
+        patientOrRecordIds.includes(p.record_id) || patientOrRecordIds.includes(p.patient.patient_id)
           ? { ...p, synced: true, synced_at: new Date().toISOString() }
           : p
       );

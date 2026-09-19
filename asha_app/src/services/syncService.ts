@@ -2,18 +2,19 @@
  * src/services/syncService.ts
  *
  * Background & On-Demand Synchronization Service.
- * Transmits local Outbox records to Swasthya Setu FastAPI backend.
- * Gracefully handles offline / airplane mode with zero crash rate.
+ * Transmits local Outbox records to Swasthya Setu FastAPI backend (/sync).
+ * Gracefully handles offline / airplane mode with zero crash rate and zero fake syncs.
  */
 
 import { StorageService } from "./storageService";
-
-const BACKEND_URL = "http://10.0.2.2:8001"; // Default Android emulator host loopback or localhost
+import { API_BASE_URL } from "../config";
 
 export interface SyncResult {
   success: boolean;
   syncedCount: number;
   message: string;
+  mismatchesCount?: number;
+  errorsCount?: number;
   error?: string;
 }
 
@@ -36,62 +37,124 @@ export const SyncService = {
         };
       }
 
-      // Check server connectivity with short 2s timeout
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2500);
+      // Check server health with 3s timeout
+      const healthController = new AbortController();
+      const healthTimeout = setTimeout(() => healthController.abort(), 3000);
 
+      let isHealthy = false;
       try {
-        const response = await fetch(`${BACKEND_URL}/health`, {
+        const healthRes = await fetch(`${API_BASE_URL}/health`, {
           method: "GET",
-          signal: controller.signal,
+          signal: healthController.signal,
         });
-        clearTimeout(timeout);
-
-        if (response.ok) {
-          // Send sync payload
-          const syncPayload = {
-            patients: pendingPatients,
-            referrals: pendingReferrals,
-            synced_at: new Date().toISOString(),
-          };
-
-          const pushRes = await fetch(`${BACKEND_URL}/sync`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(syncPayload),
-          });
-
-          if (pushRes.ok) {
-            const syncedPatientIds = pendingPatients.map((p) => p.patient.patient_id);
-            const syncedReferralIds = pendingReferrals.map((r) => r.referral_id);
-            await StorageService.markRecordsAsSynced(syncedPatientIds, syncedReferralIds);
-
-            return {
-              success: true,
-              syncedCount: pendingPatients.length + pendingReferrals.length,
-              message: `Successfully synchronized ${pendingPatients.length + pendingReferrals.length} records.`,
-            };
+        clearTimeout(healthTimeout);
+        if (healthRes.ok) {
+          const healthData = await healthRes.json();
+          if (healthData.status === "ok") {
+            isHealthy = true;
           }
         }
-      } catch {
-        // Backend offline / network unreachable
+      } catch (err: any) {
+        clearTimeout(healthTimeout);
+        return {
+          success: false,
+          syncedCount: 0,
+          message: "Backend server unreachable. Records remain saved in local outbox.",
+          error: err?.message || "Health check failed",
+        };
       }
 
-      // Offline mock sync success simulation for demo resilience
-      const syncedPatientIds = pendingPatients.map((p) => p.patient.patient_id);
-      const syncedReferralIds = pendingReferrals.map((r) => r.referral_id);
-      await StorageService.markRecordsAsSynced(syncedPatientIds, syncedReferralIds);
+      if (!isHealthy) {
+        return {
+          success: false,
+          syncedCount: 0,
+          message: "Server health check failed. Records remain safely stored locally.",
+        };
+      }
+
+      // Format payload for /sync endpoint
+      const syncPayload = {
+        patients: pendingPatients.map((p) => ({
+          record_id: p.record_id,
+          patient: p.patient,
+          symptoms: p.symptoms,
+          vitals: p.vitals,
+          triage: p.triage,
+          created_at: p.created_at,
+          asha_worker_id: p.asha_worker_id,
+        })),
+        referrals: pendingReferrals.map((r) => ({
+          referral_id: r.referral_id,
+          patient_id: r.patient_id,
+          patient_name: r.patient_name,
+          patient_village: r.patient_village,
+          patient_phone: r.patient_phone,
+          patient_age: r.patient_age,
+          patient_sex: r.patient_sex,
+          urgency: r.urgency,
+          target_facility: r.target_facility,
+          status: r.status,
+          status_history: r.status_history,
+          symptoms: r.symptoms,
+          recommended_action: r.recommended_action,
+          created_at: r.created_at,
+          asha_worker_id: r.asha_worker_id,
+        })),
+        synced_at: new Date().toISOString(),
+      };
+
+      const syncController = new AbortController();
+      const syncTimeout = setTimeout(() => syncController.abort(), 10000);
+
+      const syncRes = await fetch(`${API_BASE_URL}/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(syncPayload),
+        signal: syncController.signal,
+      });
+      clearTimeout(syncTimeout);
+
+      if (!syncRes.ok) {
+        const errText = await syncRes.text();
+        return {
+          success: false,
+          syncedCount: 0,
+          message: `Server returned error (${syncRes.status}). Records preserved locally.`,
+          error: errText,
+        };
+      }
+
+      const data = await syncRes.json();
+      const syncedPatientIds: string[] = (data.synced_patients || []).map(
+        (sp: any) => sp.client_record_id || sp.client_patient_id
+      );
+      const syncedReferralIds: string[] = (data.synced_referrals || []).map(
+        (sr: any) => sr.client_ref_id
+      );
+
+      // Only mark records that the server confirmed as synced
+      if (syncedPatientIds.length > 0 || syncedReferralIds.length > 0) {
+        await StorageService.markRecordsAsSynced(syncedPatientIds, syncedReferralIds);
+      }
+
+      const totalSynced = (data.synced_patients?.length || 0) + (data.synced_referrals?.length || 0);
+      const totalErrors = data.total_errors || 0;
+      const mismatchesCount = data.mismatches_count || 0;
 
       return {
-        success: true,
-        syncedCount: pendingPatients.length + pendingReferrals.length,
-        message: `Offline Sync Outbox cleared (${pendingPatients.length + pendingReferrals.length} items verified locally).`,
+        success: data.success,
+        syncedCount: totalSynced,
+        errorsCount: totalErrors,
+        mismatchesCount: mismatchesCount,
+        message: data.success
+          ? `Successfully synchronized ${totalSynced} record${totalSynced === 1 ? "" : "s"}.`
+          : `Synchronized ${totalSynced} records with ${totalErrors} error(s).`,
       };
     } catch (e: any) {
       return {
         success: false,
         syncedCount: 0,
-        message: "Sync failed. Records remain safely stored in local outbox.",
+        message: "Sync error occurred. Records remain safely stored in local outbox.",
         error: e?.message || "Unknown error",
       };
     }

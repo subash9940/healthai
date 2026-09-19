@@ -70,6 +70,7 @@ export interface TriageEvaluationResponse {
 }
 
 export interface PatientRecord {
+  record_id: string;
   patient: PatientDemographics;
   symptoms: string[];
   vitals: Vitals;
