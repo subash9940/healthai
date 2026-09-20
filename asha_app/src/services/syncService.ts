@@ -15,6 +15,7 @@ export interface SyncResult {
   pendingCount?: number;
   rejectedCount?: number;
   legacyCount?: number;
+  unconfirmedCount?: number;
   message: string;
   mismatchesCount?: number;
   errorsCount?: number;
@@ -153,6 +154,7 @@ export const SyncService = {
       }
 
       const data = await syncRes.json();
+      const unconfirmedCount = (data.unconfirmed_referrals || []).length;
       const syncedPatientIds: string[] = (data.synced_patients || []).map(
         (sp: any) => sp.client_record_id || sp.client_patient_id
       );
@@ -170,17 +172,24 @@ export const SyncService = {
       const mismatchesCount = data.mismatches_count || 0;
       const remainingPending = totalPending - totalSynced;
 
+      let message = data.success
+        ? `Successfully synchronized ${totalSynced} record${totalSynced === 1 ? "" : "s"}.`
+        : `Synchronized ${totalSynced} records with ${totalErrors} error(s).`;
+
+      if (unconfirmedCount > 0) {
+        message = `Synchronized ${totalSynced} record(s). ${unconfirmedCount} referral(s) could not be confirmed by the server and remain pending.`;
+      }
+
       return {
-        success: data.success,
+        success: data.success && unconfirmedCount === 0,
         syncedCount: totalSynced,
         pendingCount: remainingPending > 0 ? remainingPending : 0,
         rejectedCount: totalErrors,
         legacyCount,
+        unconfirmedCount,
         errorsCount: totalErrors,
         mismatchesCount: mismatchesCount,
-        message: data.success
-          ? `Successfully synchronized ${totalSynced} record${totalSynced === 1 ? "" : "s"}.`
-          : `Synchronized ${totalSynced} records with ${totalErrors} error(s).`,
+        message,
       };
     } catch (e: any) {
       return {
