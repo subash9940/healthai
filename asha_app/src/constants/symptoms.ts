@@ -157,6 +157,23 @@ export const ASHA_SYMPTOMS: SymptomItem[] = [
       ta: "தொடர் இருமல்",
     },
   },
+  {
+    id: "cough_more_than_2_weeks",
+    isDangerSign: false,
+    category: "respiratory",
+    labels: {
+      mr: "२ आठवड्यांपेक्षा जास्त काळ खोकला (टीबी संशय)",
+      hi: "2 सप्ताह से अधिक समय से लगातार खांसी (टीबी लक्षण)",
+      en: "Cough lasting more than 2 weeks (TB Warning)",
+      ta: "2 வாரங்களுக்கும் மேலாக நீடிக்கும் இருமல் (காசநோய் அறிகுறி)",
+    },
+    description: {
+      mr: "संभाव्य टीबी (क्षयरोग) चे लक्षण",
+      hi: "संभावित टीबी (क्षयरोग) का लक्षण",
+      en: "Presumptive pulmonary tuberculosis symptom",
+      ta: "சாத்தியமான காசநோய் (TB) அறிகுறி",
+    },
+  },
 
   // 3. Fever & Infectious
   {
@@ -174,6 +191,23 @@ export const ASHA_SYMPTOMS: SymptomItem[] = [
       hi: "शरीर गर्म लगना या थर्मामीटर पर बुखार",
       en: "Recorded or palpable fever",
       ta: "உடல் சூடாக இருத்தல்",
+    },
+  },
+  {
+    id: "fever_more_than_2_weeks",
+    isDangerSign: false,
+    category: "fever",
+    labels: {
+      mr: "२ आठवड्यांपेक्षा जास्त काळ सतत ताप",
+      hi: "2 सप्ताह से अधिक समय से लगातार बुखार",
+      en: "Fever lasting more than 2 weeks",
+      ta: "2 வாரங்களுக்கும் மேலாக நீடிக்கும் காய்ச்சல்",
+    },
+    description: {
+      mr: "दीर्घकाळ ताप - टीबी/तपासणी आवश्यक",
+      hi: "लंबे समय से बुखार - टीबी/जांच की आवश्यकता",
+      en: "Prolonged fever requiring TB / systemic workup",
+      ta: "நீண்ட கால காய்ச்சல் - பரிசோதனை தேவை",
     },
   },
   {
