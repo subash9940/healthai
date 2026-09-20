@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const strict = searchParams.get("strict") === "1";
+
   try {
     const FASTAPI_URL = process.env.FASTAPI_BACKEND_URL
       ? process.env.FASTAPI_BACKEND_URL.replace(/\/triage$/, "/facility/list")
@@ -16,7 +19,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(data, { status: 200 });
     }
 
-    // Fallback public list if backend is momentarily unreachable
+    if (strict) {
+      return NextResponse.json(
+        { error: "Facility list unavailable offline" },
+        { status: 503 }
+      );
+    }
+
+    // Fallback public list if backend is momentarily unreachable (non-strict only)
     return NextResponse.json(
       [
         { id: "e0a1b2c3-d4e5-4f6a-b7c8-d9e0f1a2b3c4", name: "PHC Shirur (प्राथमिक आरोग्य केंद्र शिरूर)", level: "phc", district: "Pune" },
@@ -27,6 +37,12 @@ export async function GET(req: NextRequest) {
       { status: 200 }
     );
   } catch (err: any) {
+    if (strict) {
+      return NextResponse.json(
+        { error: "Facility list unavailable offline" },
+        { status: 503 }
+      );
+    }
     return NextResponse.json(
       [
         { id: "e0a1b2c3-d4e5-4f6a-b7c8-d9e0f1a2b3c4", name: "PHC Shirur (प्राथमिक आरोग्य केंद्र शिरूर)", level: "phc", district: "Pune" },
