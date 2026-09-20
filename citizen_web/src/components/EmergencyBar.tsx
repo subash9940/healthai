@@ -7,6 +7,7 @@ import {
   getStoredProfile,
   clearProfile,
   processSosQueue,
+  getSosQueue,
 } from '../lib/profile';
 import RegistrationModal from './RegistrationModal';
 import SosModal from './SosModal';
@@ -17,28 +18,41 @@ export default function EmergencyBar() {
   const [profile, setProfile] = useState<JeevanyaProfile | null>(null);
   const [isRegOpen, setIsRegOpen] = useState(false);
   const [isSosOpen, setIsSosOpen] = useState(false);
+  const [pendingSosCount, setPendingSosCount] = useState<number>(0);
 
   const refreshProfile = useCallback(() => {
     setProfile(getStoredProfile());
   }, []);
 
+  const refreshQueueCount = useCallback(() => {
+    const queue = getSosQueue();
+    setPendingSosCount(queue.length);
+  }, []);
+
   useEffect(() => {
     refreshProfile();
+    refreshQueueCount();
     // Process any queued offline SOS alerts when online or on mount
-    processSosQueue();
+    processSosQueue().then(refreshQueueCount);
 
-    const handleOnline = () => {
-      processSosQueue();
+    const handleSync = () => {
+      processSosQueue().then(refreshQueueCount);
+      refreshQueueCount();
     };
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('focus', handleOnline);
+    window.addEventListener('online', handleSync);
+    window.addEventListener('focus', handleSync);
+    window.addEventListener('storage', refreshQueueCount);
+
+    const interval = setInterval(handleSync, 5000);
 
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('focus', handleOnline);
+      clearInterval(interval);
+      window.removeEventListener('online', handleSync);
+      window.removeEventListener('focus', handleSync);
+      window.removeEventListener('storage', refreshQueueCount);
     };
-  }, [refreshProfile]);
+  }, [refreshProfile, refreshQueueCount]);
 
   const handleSavedProfile = (saved: JeevanyaProfile) => {
     setProfile(saved);
@@ -89,6 +103,32 @@ export default function EmergencyBar() {
                 {t('sos_btn_label') !== 'sos_btn_label' ? t('sos_btn_label') : 'EMERGENCY SOS'}
               </span>
             </button>
+
+            {pendingSosCount > 0 && (
+              <div
+                style={{
+                  background: '#fef3c7',
+                  border: '1px solid #f59e0b',
+                  color: '#92400e',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                }}
+                role="status"
+                aria-live="polite"
+              >
+                <span>🔄</span>
+                <span>
+                  {t('sos_queue_pending_badge') !== 'sos_queue_pending_badge'
+                    ? t('sos_queue_pending_badge').replace('{count}', pendingSosCount.toString())
+                    : `${pendingSosCount} SOS waiting to send`}
+                </span>
+              </div>
+            )}
 
             <div className="emergency-strip-text">
               <span aria-hidden="true">📞</span>

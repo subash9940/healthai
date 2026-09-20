@@ -321,5 +321,6 @@
   "sos_offline_action_hint": "Your alert is stored locally and will dispatch automatically when connectivity returns. In an immediate life-threatening emergency, send an SMS or call directly:",
   "sos_send_sms_btn": "Send SMS to {facility}",
   "sos_call_btn": "Call {facility}",
-  "sos_sms_opened_hint": "SMS app opened - press Send in your messaging app"
+  "sos_sms_opened_hint": "SMS app opened - press Send in your messaging app",
+  "sos_queue_pending_badge": "{count} SOS waiting to send"
 }

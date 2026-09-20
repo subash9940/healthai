@@ -321,5 +321,6 @@
   "sos_offline_action_hint": "आपका अलर्ट सुरक्षित है और इंटरनेट बहाल होने पर स्वतः भेजा जाएगा। तत्काल आपातकाल में, सीधे SMS भेजें या कॉल करें:",
   "sos_send_sms_btn": "{facility} को SMS भेजें",
   "sos_call_btn": "{facility} को कॉल करें",
-  "sos_sms_opened_hint": "SMS ऐप खुल गया है - अपने मैसेजिंग ऐप में भेजें (Send) दबाएं"
+  "sos_sms_opened_hint": "SMS ऐप खुल गया है - अपने मैसेजिंग ऐप में भेजें (Send) दबाएं",
+  "sos_queue_pending_badge": "{count} SOS भेजे जाने बाकी हैं"
 }

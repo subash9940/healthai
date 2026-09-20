@@ -6,6 +6,7 @@ import {
   JeevanyaProfile,
   addToSosQueue,
   processSosQueue,
+  getSosQueue,
 } from '../lib/profile';
 
 interface SosModalProps {
@@ -33,6 +34,39 @@ export default function SosModal({
     smsHref: string;
     telHref: string;
   } | null>(null);
+
+  // When in 'offline' state, monitor background queue drain so we switch to 'sent' automatically
+  useEffect(() => {
+    if (!isOpen || status !== 'offline' || !alertPayload?.client_alert_id) {
+      return;
+    }
+
+    const checkQueue = () => {
+      // First attempt a background flush
+      processSosQueue();
+      const currentQueue = getSosQueue();
+      const stillInQueue = currentQueue.some(
+        (item) => item.client_alert_id === alertPayload.client_alert_id
+      );
+      if (!stillInQueue) {
+        setConfirmedFacilityName(profile?.subcentre.name || '');
+        setStatus('sent');
+      }
+    };
+
+    // Check immediately on mount/state-change
+    checkQueue();
+
+    const interval = setInterval(checkQueue, 5000);
+    window.addEventListener('online', checkQueue);
+    window.addEventListener('focus', checkQueue);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', checkQueue);
+      window.removeEventListener('focus', checkQueue);
+    };
+  }, [isOpen, status, alertPayload?.client_alert_id, profile?.subcentre.name]);
 
   useEffect(() => {
     if (isOpen) {

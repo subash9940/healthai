@@ -321,5 +321,6 @@
   "sos_offline_action_hint": "आपला अलर्ट सुरक्षित ठेवला आहे व इंटरनेट आल्यावर पाठवला जाईल. तत्काळ धोक्याच्या प्रसंगी थेट SMS पाठवा किंवा कॉल करा:",
   "sos_send_sms_btn": "{facility} ला SMS पाठवा",
   "sos_call_btn": "{facility} ला कॉल करा",
-  "sos_sms_opened_hint": "SMS ॲप उघडले आहे - मेसेजिंग ॲपमध्ये Send दाबा"
+  "sos_sms_opened_hint": "SMS ॲप उघडले आहे - मेसेजिंग ॲपमध्ये Send दाबा",
+  "sos_queue_pending_badge": "{count} SOS पाठवणे बाकी आहे"
 }
