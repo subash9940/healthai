@@ -1,8 +1,28 @@
 """
 persistence.py — writes evaluate() output into triage_records (+ patients,
 + referrals when needed) and provides batch sync persistence.
+
+============================================================================
+FIELD-NAME RECONCILIATION — COMPLETED (updated for triage_contract v3)
+============================================================================
+TriageRequest fields used here:
+    ✅ patient_id (Optional[str] — UUID/ULID, converted to UUID for DB)
+    ✅ patient_age_years, patient_sex, is_pregnant, is_postpartum
+    ✅ source_tier, language, symptoms (list[str]), vitals (Vitals model)
+    ✅ patient_phone (new in v3 — used for phone-based dedup)
+    ✅ patient_abha_id (new in v3 — stored, dedup not yet implemented)
+
+Fields NOT on TriageRequest (still return None via getattr):
+    — patient_display_name, patient_village, asha_worker_id, facility_id
+
+TriageResponse fields:
+    ✅ All match: urgency, recommended_action, citizen_message, rule_trace,
+       requires_referral, referral_target_level, triage_record_id,
+       patient_id, referral_id
+============================================================================
 """
 
+from datetime import datetime, timezone
 import json
 import logging
 import uuid
@@ -33,13 +53,20 @@ def _enum_val(x: Any) -> Optional[str]:
 
 
 def _extract_request_fields(request: Any) -> dict:
-    """Extract all fields needed for patient/triage_records inserts."""
+    """Extract all fields needed for patient/triage_records inserts.
+
+    patient_id: if present, it's a UUID string — convert to uuid.UUID.
+    patient_phone/abha_id: now on TriageRequest v3.
+    patient_display_name/village, asha_worker_id/facility_id: still not on
+    TriageRequest — getattr returns None, stored as NULL.
+    """
     patient_id_str = getattr(request, "patient_id", None)
     patient_id_uuid = None
     if patient_id_str is not None:
         try:
             patient_id_uuid = uuid.UUID(patient_id_str)
         except (ValueError, AttributeError):
+            # Not a valid UUID — treat as None → create/dedup new patient
             pass
 
     return {
@@ -51,9 +78,10 @@ def _extract_request_fields(request: Any) -> dict:
         "language": _enum_val(getattr(request, "language", None)) or "mr",
         "symptoms": getattr(request, "symptoms", None),
         "vitals": getattr(request, "vitals", None),
-        "phone": getattr(request, "patient_phone", None),
-        "abha_id": getattr(request, "patient_abha_id", None),
-        "duration_days": getattr(request, "symptom_duration_days", None),
+        "phone": getattr(request, "patient_phone", None),      # now on TriageRequest v3
+        "abha_id": getattr(request, "patient_abha_id", None),  # now on TriageRequest v3
+        "duration_days": getattr(request, "symptom_duration_days", None), # now on TriageRequest v3 (duration staging)
+        # Still not on TriageRequest — always None:
         "display_name": getattr(request, "patient_display_name", None),
         "village": getattr(request, "patient_village", None),
         "asha_worker_id": getattr(request, "asha_worker_id", None),
@@ -63,7 +91,7 @@ def _extract_request_fields(request: Any) -> dict:
 
 
 def _extract_response_fields(response: Any) -> dict:
-    """All fields exist on TriageResponse."""
+    """All fields exist on TriageResponse v2."""
     return {
         "urgency": _enum_val(getattr(response, "urgency")),
         "recommended_action": getattr(response, "recommended_action"),
@@ -75,12 +103,15 @@ def _extract_response_fields(response: Any) -> dict:
 
 
 def _to_jsonb(value: Any) -> str:
-    """asyncpg needs JSONB params as JSON strings."""
+    """
+    asyncpg needs JSONB params as JSON strings (or use a codec).
+    Handles pydantic models, dicts, lists, or None.
+    """
     if value is None:
         return json.dumps(None)
-    if hasattr(value, "model_dump"):
+    if hasattr(value, "model_dump"):  # pydantic v2
         return json.dumps(value.model_dump(mode="json"))
-    if hasattr(value, "dict"):
+    if hasattr(value, "dict"):  # pydantic v1
         return json.dumps(value.dict())
     return json.dumps(value)
 
@@ -96,15 +127,45 @@ def _safe_worker_uuid(worker_id_str: Optional[str]) -> Optional[uuid.UUID]:
         return None
 
 
+def _parse_iso_datetime(dt_str: Optional[str]) -> datetime:
+    """F1: Parse client ISO-8601 string into tz-aware datetime. If unparsable, fallback to now() in UTC."""
+    if dt_str:
+        try:
+            dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Failed to parse datetime '{dt_str}' ({e}) — falling back to now(timezone.utc)")
+    return datetime.now(timezone.utc)
+
+
 # ---------------------------------------------------------------------------
 # Patient
 # ---------------------------------------------------------------------------
 
 async def get_or_create_patient(conn: asyncpg.Connection, fields: dict) -> uuid.UUID:
-    """Patient resolution order: explicit patient_id -> phone -> new insert."""
+    """
+    Patient resolution order:
+    1. If patient_id (UUID) was supplied on the request → use it directly
+       (assumes caller validated the ID exists; no extra SELECT).
+    2. If patient_phone was supplied → look up existing patient by phone.
+       If found: return that patient's ID (no INSERT, no overwrite of existing data).
+       If not found: fall through to INSERT.
+    3. No identifier → INSERT new patient row.
+
+    Merge policy: we never overwrite existing display_name/village/abha_id
+    with blank values from a new request. The patient row is created once;
+    updates to demographics are a separate, not-yet-specced operation.
+
+    ABHA-based dedup is intentionally skipped for this pass — phone lookup
+    only, keeping this simple for the hackathon demo.
+    """
+    # Priority 1: explicit patient_id
     if fields["patient_id"] is not None:
         return fields["patient_id"]
 
+    # Priority 2: phone-based dedup
     if fields["phone"]:
         existing = await conn.fetchrow(
             "SELECT id FROM patients WHERE phone = $1 LIMIT 1",
@@ -113,6 +174,7 @@ async def get_or_create_patient(conn: asyncpg.Connection, fields: dict) -> uuid.
         if existing:
             return existing["id"]
 
+    # Priority 3: insert new patient
     row = await conn.fetchrow(
         """
         INSERT INTO patients (display_name, age_years, sex, village, phone, abha_id)
@@ -130,7 +192,7 @@ async def get_or_create_patient(conn: asyncpg.Connection, fields: dict) -> uuid.
 
 
 # ---------------------------------------------------------------------------
-# Save Triage (for /triage endpoint)
+# Main entry point
 # ---------------------------------------------------------------------------
 
 async def save_triage(
@@ -138,6 +200,18 @@ async def save_triage(
     request: Any,
     response: Any,
 ) -> dict:
+    """
+    Persists one evaluate() call: patient (if needed) + triage_records row,
+    and a referrals row (+ initial state_transitions row) if the response
+    says a referral is required.
+
+    Returns:
+        {
+            "triage_record_id": UUID,
+            "patient_id": UUID,
+            "referral_id": UUID | None,
+        }
+    """
     req = _extract_request_fields(request)
     resp = _extract_response_fields(response)
 
@@ -200,6 +274,16 @@ async def _create_referral(
     target_level: Optional[str],
     created_by: Optional[uuid.UUID],
 ) -> uuid.UUID:
+    """
+    Creates the referral row plus its first state_transitions row
+    (from_state = NULL -> to_state = 'created'), so the audit trail
+    starts at referral creation, not at the first state change.
+
+    facility_id is left NULL here — nearest/appropriate facility lookup
+    by target_level + patient location is referral-routing logic that
+    belongs with the state machine spec, not this insert path. Wiring
+    that in is a follow-up once the routing rule is decided.
+    """
     referral_row = await conn.fetchrow(
         """
         INSERT INTO referrals (triage_record_id, facility_id, created_by, state)
@@ -297,6 +381,9 @@ async def sync_single_patient_record(
             # 3. D3: client_record_id = f"{patient_id}:{created_at}"
             client_record_id = f"{client_pid}:{rec.created_at}"
 
+            # F1: Parse client created_at as tz-aware ISO-8601 datetime
+            created_at_dt = _parse_iso_datetime(rec.created_at)
+
             # 4. Insert triage_records with ON CONFLICT DO NOTHING (D2, D3)
             # Check if triage record already exists
             existing_tr = await conn.fetchrow(
@@ -319,13 +406,13 @@ async def sync_single_patient_record(
                     is_pregnant, is_postpartum, urgency, recommended_action,
                     citizen_message, rule_trace, requires_referral,
                     referral_target_level, client_record_id,
-                    client_claimed_urgency, urgency_mismatch
+                    client_claimed_urgency, urgency_mismatch, created_at
                 )
                 VALUES (
                     $1, 'asha_app', 'mr', $2::jsonb, $3::jsonb,
                     $4, $5, $6, $7,
                     $8, $9::jsonb, $10,
-                    $11, $12, $13, $14
+                    $11, $12, $13, $14, $15
                 )
                 ON CONFLICT (client_record_id) WHERE client_record_id IS NOT NULL DO NOTHING
                 RETURNING id
@@ -344,6 +431,7 @@ async def sync_single_patient_record(
                 client_record_id,
                 client_claimed_urgency,
                 urgency_mismatch,
+                created_at_dt,
             )
 
             if not tr_row:
@@ -366,7 +454,7 @@ async def sync_single_patient_record(
             id=client_pid,
             status="rejected",
             type="patient",
-            reason=str(e),
+            reason="internal error",
         )
 
 
@@ -394,8 +482,8 @@ async def sync_single_referral_record(
                     reason="Referral record already synchronized",
                 )
 
-            # 2. Find associated triage_records row (if any) by patient_id
-            # Try to find the most recent triage record for this patient
+            # F2: Link the triage record = latest for that patient with created_at <= referral.created_at (fallback: latest)
+            ref_created_dt = _parse_iso_datetime(rec.created_at)
             patient_row = await conn.fetchrow(
                 "SELECT id FROM patients WHERE client_patient_id = $1 LIMIT 1",
                 rec.patient_id,
@@ -403,20 +491,41 @@ async def sync_single_referral_record(
             triage_record_id = None
             if patient_row:
                 tr_row = await conn.fetchrow(
-                    "SELECT id FROM triage_records WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 1",
+                    "SELECT id FROM triage_records WHERE patient_id = $1 AND created_at <= $2 ORDER BY created_at DESC LIMIT 1",
                     patient_row["id"],
+                    ref_created_dt,
                 )
+                if not tr_row:
+                    tr_row = await conn.fetchrow(
+                        "SELECT id FROM triage_records WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 1",
+                        patient_row["id"],
+                    )
                 if tr_row:
                     triage_record_id = tr_row["id"]
 
-            # If no triage record found, try to locate by client_record_id prefix
+            # If no triage record found by patient db id, try by client_record_id prefix
             if not triage_record_id:
                 tr_row = await conn.fetchrow(
-                    "SELECT id FROM triage_records WHERE client_record_id LIKE $1 ORDER BY created_at DESC LIMIT 1",
+                    "SELECT id FROM triage_records WHERE client_record_id LIKE $1 AND created_at <= $2 ORDER BY created_at DESC LIMIT 1",
                     f"{rec.patient_id}:%",
+                    ref_created_dt,
                 )
+                if not tr_row:
+                    tr_row = await conn.fetchrow(
+                        "SELECT id FROM triage_records WHERE client_record_id LIKE $1 ORDER BY created_at DESC LIMIT 1",
+                        f"{rec.patient_id}:%",
+                    )
                 if tr_row:
                     triage_record_id = tr_row["id"]
+
+            # F2: If none found: rejected, reason "patient record not synced yet"
+            if not triage_record_id:
+                return RecordSyncStatus(
+                    id=client_ref_id,
+                    status="rejected",
+                    type="referral",
+                    reason="patient record not synced yet",
+                )
 
             # D6: Safe worker UUID
             worker_uuid = _safe_worker_uuid(rec.asha_worker_id)
@@ -479,7 +588,7 @@ async def sync_single_referral_record(
             id=client_ref_id,
             status="rejected",
             type="referral",
-            reason=str(e),
+            reason="internal error",
         )
 
 

@@ -1,8 +1,7 @@
 """
 Swasthya Setu API — main FastAPI application.
 
-Wired for DB persistence as of the /triage endpoint integration,
-and /health + /sync endpoints for ASHA mobile client synchronization.
+Wired for DB persistence as of the /triage endpoint integration.
 """
 
 from contextlib import asynccontextmanager
@@ -107,10 +106,6 @@ def verify_sync_key(x_sync_key: str | None = Header(default=None, alias="X-Sync-
     return True
 
 
-# ---------------------------------------------------------------------------
-# Triage Endpoint
-# ---------------------------------------------------------------------------
-
 @app.post("/triage", response_model=TriageResponse)
 async def triage(
     request: TriageRequest,
@@ -123,8 +118,14 @@ async def triage(
     2. Persistence layer writes to triage_records (+ patients, referrals).
     3. Return response with DB-assigned IDs attached for client reference.
     """
+    # 1. Deterministic rule engine — unchanged, still the source of truth
     response = evaluate(request)
+
+    # 2. Persist — this is the part that didn't exist before
     saved = await save_triage(pool, request, response)
+
+    # 3. Attach DB-assigned IDs so clients can reference these
+    # records later (referral status polling, FHIR bundle export, etc.)
     response.triage_record_id = str(saved["triage_record_id"])
     response.patient_id = str(saved["patient_id"])
     response.referral_id = str(saved["referral_id"]) if saved["referral_id"] else None
@@ -183,6 +184,12 @@ async def extract_symptoms(request: ExtractSymptomsRequest):
     """
     NLP symptom extraction endpoint — maps natural language transcripts
     (free-text or voice) strictly to the fixed 102-symptom vocabulary.
+
+    LLM is used ONLY for language understanding (non-clinical task).
+    Clinical severity classification remains in the deterministic rule engine.
+
+    This endpoint calls a local LLM proxy (OmniRoute on localhost:20128) using
+    the Anthropic SDK with model "kiro/auto".
     """
     from anthropic import Anthropic
 
@@ -244,13 +251,16 @@ Now extract all symptoms and vitals from the user's input."""
             messages=[{"role": "user", "content": user_message}],
         )
 
+        # Find first text block (handle ThinkingBlock reasoning objects)
         text_content = next((b.text for b in message.content if hasattr(b, "text")), None)
         if not text_content:
             raise HTTPException(status_code=500, detail="LLM returned no text content")
 
+        # Parse JSON response
         try:
             parsed = json.loads(text_content)
         except json.JSONDecodeError:
+            # Try to extract JSON from markdown code blocks
             if "```json" in text_content:
                 json_str = text_content.split("```json")[1].split("```")[0].strip()
                 parsed = json.loads(json_str)
@@ -263,6 +273,7 @@ Now extract all symptoms and vitals from the user's input."""
                     detail=f"LLM returned unparseable JSON: {text_content[:200]}"
                 )
 
+        # Validate symptoms against SYMPTOM_KEY_SET
         extracted_symptoms = parsed.get("symptoms", [])
         valid_symptoms = [s for s in extracted_symptoms if s in SYMPTOM_KEY_SET]
 
