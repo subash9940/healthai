@@ -26,6 +26,7 @@ from app.schemas.sync import SyncRequest, SyncResponse
 from app.services.rules_engine import evaluate
 from app.symptom_vocab import SYMPTOM_KEYS, SYMPTOM_KEY_SET
 from app.facility_routes import router as facility_router
+from app.sos_routes import router as sos_router
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,7 @@ app.add_middleware(
 )
 
 app.include_router(facility_router)
+app.include_router(sos_router)
 
 
 # ---------------------------------------------------------------------------

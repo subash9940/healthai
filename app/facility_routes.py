@@ -82,12 +82,12 @@ async def list_public_facilities(
     pool: asyncpg.Pool = Depends(get_pool),
 ):
     """
-    List all healthcare facilities for registration dropdowns.
+    List all healthcare facilities for registration dropdowns and SOS maps.
     """
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, name, level
+            SELECT id, name, level, contact_phone, lat, lng
             FROM facilities
             ORDER BY name ASC
             """
@@ -98,6 +98,9 @@ async def list_public_facilities(
             name=str(row["name"]),
             level=str(row["level"]),
             district="Pune",
+            contact_phone=row["contact_phone"],
+            lat=row["lat"],
+            lng=row["lng"],
         )
         for row in rows
     ]

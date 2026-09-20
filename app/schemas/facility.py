@@ -20,7 +20,10 @@ class FacilityPublicItem(BaseModel):
     id: str
     name: str
     level: str
-    district: Optional[str] = None
+    district: Optional[str] = "Pune"
+    contact_phone: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 
 class FacilityAvailabilityItem(BaseModel):
@@ -107,4 +110,3 @@ class UpdateFacilityStatusRequest(BaseModel):
     operational_status: Optional[str] = None  # 'AVAILABLE' | 'BUSY' | 'EMERGENCY_ONLY' | 'FULL'
     available_beds: Optional[int] = None
     status_note: Optional[str] = None
-
