@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useI18n, Language } from '../lib/useTranslation';
 import StepDemographics, { DemographicsData } from '../components/StepDemographics';
@@ -10,6 +10,7 @@ import TriageResult, { TriageResultData } from '../components/TriageResult';
 import { evaluateTriage } from '../lib/localRulesEngine';
 import { TriageRequest, TriageResponse } from '../lib/triageContract';
 import { generateProblemSummary } from '../lib/problemSummary';
+import { getStoredProfile } from '../lib/profile';
 
 const initialDemographics: DemographicsData = {
   age_years: 30,
@@ -49,6 +50,24 @@ export default function HomePage() {
   const [triageResult, setTriageResult] = useState<TriageResultData | null>(null);
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Pre-fill demographics from stored Jeevanya profile if available
+  useEffect(() => {
+    const profile = getStoredProfile();
+    if (profile) {
+      setDemographics((prev) => {
+        if (prev.patient_name && prev.patient_name.trim() !== '') return prev;
+        return {
+          ...prev,
+          patient_name: profile.name || prev.patient_name,
+          phone_number: profile.phone || prev.phone_number,
+          village: profile.village || prev.village,
+          age_years: typeof profile.age === 'number' && profile.age > 0 ? profile.age : prev.age_years,
+          patient_sex: profile.sex === 'female' ? 'female' : 'male',
+        };
+      });
+    }
+  }, []);
 
   // Clear toast feedback
   const clearStatus = () => setStatusMessage(null);
