@@ -403,7 +403,7 @@ async def sync_single_referral_record(
             triage_record_id = None
             if patient_row:
                 tr_row = await conn.fetchrow(
-                    "SELECT id FROM triage_records WHERE patient_id = $1 ORDER BY evaluated_at DESC LIMIT 1",
+                    "SELECT id FROM triage_records WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 1",
                     patient_row["id"],
                 )
                 if tr_row:
@@ -412,7 +412,7 @@ async def sync_single_referral_record(
             # If no triage record found, try to locate by client_record_id prefix
             if not triage_record_id:
                 tr_row = await conn.fetchrow(
-                    "SELECT id FROM triage_records WHERE client_record_id LIKE $1 ORDER BY evaluated_at DESC LIMIT 1",
+                    "SELECT id FROM triage_records WHERE client_record_id LIKE $1 ORDER BY created_at DESC LIMIT 1",
                     f"{rec.patient_id}:%",
                 )
                 if tr_row:
