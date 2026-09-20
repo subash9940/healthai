@@ -184,6 +184,8 @@ SYMPTOM_KEYS: list[str] = [
     "weight_loss",
 ]
 
+SYMPTOM_KEY_SET: set[str] = set(SYMPTOM_KEYS)
+
 # ---------------------------------------------------------------------------
 # Human-readable labels for UI display and confirmation screens.
 # Every key must have a label in all 4 supported languages.
