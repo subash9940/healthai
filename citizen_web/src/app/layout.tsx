@@ -4,17 +4,20 @@ import { I18nProvider } from '../lib/useTranslation';
 import Header from '../components/Header';
 import EmergencyBar from '../components/EmergencyBar';
 import CookieConsent from '../components/CookieConsent';
+import ServiceWorkerRegister from '../components/ServiceWorkerRegister';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Swasthya Setu (स्वास्थ्य सेतु) | Rural Health Triage & Referral',
-    template: '%s | Swasthya Setu',
+    default: 'Jeevanya | Rural Health Triage & Emergency Referral',
+    template: '%s | Jeevanya',
   },
   description:
-    'Free AI-assisted rural primary healthcare clinical decision support and triage referral system. Offline-first, evidence-backed clinical protocols based on National Health Mission (NHM) standards.',
+    'Free AI-assisted rural primary healthcare clinical decision support, emergency SOS, and triage referral system. Offline-first, evidence-backed clinical protocols based on National Health Mission (NHM) standards.',
   keywords: [
+    'Jeevanya',
     'Swasthya Setu',
     'Rural Health',
+    'Emergency SOS',
     'Health Triage',
     'Clinical Decision Support',
     'NHM Guidelines',
@@ -24,7 +27,7 @@ export const metadata: Metadata = {
     'Primary Health Centre',
   ],
   authors: [{ name: 'Ministry of Health & Family Welfare / National Health Mission' }],
-  creator: 'Swasthya Setu Digital Health Initiative',
+  creator: 'Jeevanya Digital Health Initiative',
   metadataBase: new URL('https://swasthyasetu.nhm.gov.in'),
   alternates: {
     canonical: 'https://swasthyasetu.nhm.gov.in',
@@ -32,14 +35,21 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="%230f766e"/><path d="M50 25v50M25 50h50" stroke="white" stroke-width="14" stroke-linecap="round"/></svg>',
-        type: 'image/svg+xml',
+        url: '/icon-192.png',
+        sizes: '192x192',
+        type: 'image/png',
+      },
+      {
+        url: '/icon-512.png',
+        sizes: '512x512',
+        type: 'image/png',
       },
     ],
     apple: [
       {
-        url: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="%230f766e"/><path d="M50 25v50M25 50h50" stroke="white" stroke-width="14" stroke-linecap="round"/></svg>',
-        type: 'image/svg+xml',
+        url: '/icon-192.png',
+        sizes: '192x192',
+        type: 'image/png',
       },
     ],
   },
@@ -47,22 +57,22 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_IN',
     url: 'https://swasthyasetu.nhm.gov.in',
-    title: 'Swasthya Setu (स्वास्थ्य सेतु) | Clinical Health Triage',
-    description: 'Instant, evidence-backed clinical guidance and facility routing for rural citizens.',
-    siteName: 'Swasthya Setu',
+    title: 'Jeevanya | Clinical Health Triage & Emergency Referral',
+    description: 'Instant, evidence-backed clinical guidance, emergency SOS dispatch, and facility routing for rural citizens.',
+    siteName: 'Jeevanya',
     images: [
       {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Swasthya Setu - Rural Primary Healthcare Triage System',
+        alt: 'Jeevanya - Rural Primary Healthcare Triage System',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Swasthya Setu (स्वास्थ्य सेतु) | Clinical Health Triage',
-    description: 'Instant, evidence-backed clinical guidance and facility routing for rural citizens.',
+    title: 'Jeevanya | Clinical Health Triage & Emergency Referral',
+    description: 'Instant, evidence-backed clinical guidance, emergency SOS dispatch, and facility routing for rural citizens.',
     images: ['/og-image.png'],
   },
 };
@@ -78,7 +88,7 @@ const jsonLdData = [
   {
     '@context': 'https://schema.org',
     '@type': 'MedicalOrganization',
-    name: 'Swasthya Setu Rural Healthcare Initiative',
+    name: 'Jeevanya Rural Healthcare Initiative',
     url: 'https://swasthyasetu.nhm.gov.in',
     logo: 'https://swasthyasetu.nhm.gov.in/logo.png',
     description: 'National Health Mission aligned rural clinical triage and emergency facility referral network.',
@@ -98,7 +108,7 @@ const jsonLdData = [
   {
     '@context': 'https://schema.org',
     '@type': 'GovernmentOrganization',
-    name: 'National Health Mission - Swasthya Setu',
+    name: 'National Health Mission - Jeevanya',
     url: 'https://swasthyasetu.nhm.gov.in',
     parentOrganization: {
       '@type': 'GovernmentOrganization',
@@ -145,7 +155,7 @@ const jsonLdData = [
   {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: 'Swasthya Setu',
+    name: 'Jeevanya',
     url: 'https://swasthyasetu.nhm.gov.in',
     potentialAction: {
       '@type': 'SearchAction',
@@ -163,11 +173,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link
-          rel="icon"
-          href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230f766e'/><path d='M50 25v50M25 50h50' stroke='white' stroke-width='14' stroke-linecap='round'/></svg>"
-          type="image/svg+xml"
-        />
+        <link rel="icon" href="/icon-192.png" type="image/png" />
+        <link rel="manifest" href="/manifest.webmanifest" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdData) }}
@@ -175,6 +182,7 @@ export default function RootLayout({
       </head>
       <body>
         <I18nProvider>
+          <ServiceWorkerRegister />
           <Header />
           <EmergencyBar />
           {children}

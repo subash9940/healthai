@@ -7,13 +7,11 @@
   "helplineCall": "104 Health Advice",
   "facilityQueue": "Doctor & Clinic Queue",
   "backToCitizen": "Back to symptom check",
-
   "emergencyBar": {
     "prompt": "If someone is in immediate danger or severely hurt, call an ambulance now:",
     "call108": "Call 108 (Ambulance)",
     "call104": "Call 104 (Health advice)"
   },
-
   "evidence": {
     "title": "How this works",
     "lead": "If someone is sick or hurt, answer a few questions about their age, symptoms, and vital signs. The system checks their answers against official government health rules and tells you what to do next — whether to rest at home, visit your local clinic, or get to a hospital right away. It does not use AI to guess diagnoses.",
@@ -26,13 +24,11 @@
     "fact4Number": "4 Facility Levels",
     "fact4Text": "Guides you to the right place: Sub-centre, PHC, CHC, or District Hospital."
   },
-
   "heroCta": {
     "title": "Clinical Symptom Assessment",
     "lead": "Answer questions regarding age, symptoms, and optional vitals. Triage follows verified NHM and MoHFW clinical protocols to recommend the appropriate facility level.",
     "button": "Start Assessment"
   },
-
   "wizard": {
     "step1": "Patient Details",
     "step2": "Symptoms",
@@ -43,7 +39,6 @@
     "step3Full": "3. Vitals (Optional)",
     "step4Full": "4. Clinical Guidance"
   },
-
   "demographics": {
     "title": "Who is this assessment for?",
     "subtitle": "Clinical rules depend on age, sex, and whether the person is pregnant or recently gave birth.",
@@ -92,7 +87,6 @@
     "no": "No",
     "nextButton": "Continue to Symptoms"
   },
-
   "symptoms": {
     "title": "What symptoms are they having?",
     "subtitle": "Select everything that applies. Red items are urgent danger signs.",
@@ -142,7 +136,6 @@
       "confirmAdd": "Confirm and add"
     }
   },
-
   "vitals": {
     "title": "Did you measure any vitals?",
     "subtitle": "These are optional. If you have a thermometer, BP monitor, or pulse oximeter at home, enter what you measured. Otherwise, skip this step.",
@@ -168,7 +161,6 @@
     "prevButton": "Back",
     "submitButton": "Evaluate Assessment"
   },
-
   "results": {
     "title": "Triage Result & Guidance",
     "slipHeader": "Government of Maharashtra — Clinical Triage Advice Slip",
@@ -225,13 +217,11 @@
     "newTriage": "Start New Assessment",
     "facilityNote": "You can save or print this page to show the health worker when you arrive."
   },
-
   "cookie": {
     "text": "This portal uses essential local storage to remember your language preference. We do not use commercial tracking cookies or share your medical data. Read our",
     "privacyPolicy": "Privacy Policy",
     "understood": "Understood"
   },
-
   "footer": {
     "deptTitle": "Swasthya Setu · Government of Maharashtra",
     "deptSub": "Public Health Department · National Health Mission (NHM) · Smart India Hackathon (SIH26133)",
@@ -241,11 +231,9 @@
     "ambulance": "108 Ambulance",
     "helpline": "104 Helpline"
   },
-
   "common": {
     "submitError": "Unable to complete evaluation right now. Please try again or visit your nearest primary health centre."
   },
-
   "facilityPage": {
     "title": "Primary Health Centre (PHC) Clinical Triage Queue",
     "subtitle": "Incoming triage submissions from offline ASHA workers and citizen self-assessments across Maharashtra districts.",
@@ -285,5 +273,53 @@
       "viewFhir": "View FHIR R4 JSON",
       "close": "Close"
     }
-  }
+  },
+  "reg_title": "Emergency SOS & Profile Registration",
+  "reg_subtitle": "Register your details once to enable one-tap Emergency SOS dispatch and rapid clinical triage.",
+  "reg_edit_link": "Edit Profile",
+  "reg_reset_link": "Reset",
+  "reg_btn_bar": "Register Profile for SOS",
+  "reg_reset_confirm": "Are you sure you want to reset your stored Jeevanya profile? You will need to re-register before sending emergency SOS alerts.",
+  "reg_offline_error": "Connect to the internet once to register. Facility list is unavailable offline.",
+  "reg_name_label": "Full Name",
+  "reg_name_placeholder": "e.g. Ramesh Jadhav",
+  "reg_name_error": "Please enter your full name.",
+  "reg_phone_label": "Mobile Phone Number",
+  "reg_phone_placeholder": "10-digit mobile number (e.g. 9876543210)",
+  "reg_phone_error": "Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.",
+  "reg_village_label": "Village / Town",
+  "reg_village_placeholder": "e.g. Shirur, Taluka Haveli",
+  "reg_village_error": "Please enter your village or town.",
+  "reg_age_label": "Age (optional)",
+  "reg_age_placeholder": "e.g. 35",
+  "reg_sex_label": "Sex (optional)",
+  "reg_sex_male": "Male",
+  "reg_sex_female": "Female",
+  "reg_sex_other": "Other",
+  "reg_subcentre_label": "Assigned Sub-centre / Health Facility",
+  "reg_subcentre_loading": "Loading verified health facilities...",
+  "reg_subcentre_placeholder": "Select your nearest Sub-centre...",
+  "reg_subcentre_error": "Please select your assigned Sub-centre or Health Facility.",
+  "reg_location_btn": "Share GPS Location",
+  "reg_location_fetching": "Acquiring GPS coordinates...",
+  "reg_location_saved": "GPS Coordinates Attached",
+  "reg_location_denied": "Location permission denied or unavailable.",
+  "reg_submit_btn": "Save Profile & Enable SOS",
+  "sos_btn_label": "EMERGENCY SOS",
+  "sos_unregistered_title": "Registration Required for SOS",
+  "sos_unregistered_desc": "To send an instant emergency alert with your identity and health center routing, please complete your one-time profile registration first.",
+  "sos_confirm_title": "Send Emergency SOS Alert?",
+  "sos_confirm_subtitle": "This will immediately notify your assigned sub-centre and local health team for emergency assistance.",
+  "sos_alert_summary": "Alert Details to be Transmitted:",
+  "sos_confirm_yes": "Yes, Send Emergency SOS Now",
+  "sos_confirm_cancel": "Cancel",
+  "sos_status_sending": "Sending Emergency Alert...",
+  "sos_status_sent": "Sent - {facility} has your alert",
+  "sos_sent_help_dispatched": "Your emergency alert has been recorded and transmitted. Local medical assistance and facility staff are being notified.",
+  "sos_status_failed_offline": "Not sent - no internet",
+  "sos_status_queued": "Queued - will send when online",
+  "sos_offline_action_hint": "Your alert is stored locally and will dispatch automatically when connectivity returns. In an immediate life-threatening emergency, send an SMS or call directly:",
+  "sos_send_sms_btn": "Send SMS to {facility}",
+  "sos_call_btn": "Call {facility}",
+  "sos_sms_opened_hint": "SMS app opened - press Send in your messaging app"
 }
