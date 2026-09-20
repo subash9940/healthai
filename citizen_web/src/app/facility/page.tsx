@@ -16,7 +16,7 @@ interface StaffUser {
 interface SosAlertItem {
   id: string;
   client_alert_id: string;
-  reported_at: string;
+  reported_at: string | null;
   received_at: string;
   patient_name: string;
   patient_phone: string;
@@ -264,8 +264,10 @@ export default function FacilityDashboard() {
           setSosAlerts(data);
           setSosError('');
         }
-      } else if (res.status === 401) {
-        // Session expired or invalid
+      } else if (res.status === 401 || res.status === 403) {
+        handleLogout();
+        setLoginError('Session expired - please log in again');
+        return;
       } else {
         const errData = await res.json().catch(() => ({}));
         setSosError(errData?.error || 'Failed to fetch SOS alerts');
@@ -578,13 +580,18 @@ export default function FacilityDashboard() {
     }
   };
 
-  const getReportedEarlierDiffMins = (reportedAt: string, receivedAt: string) => {
+  const getReportedEarlierDiffMins = (reportedAt: string | null | undefined, receivedAt: string) => {
+    if (!reportedAt || !reportedAt.trim()) return 0;
     try {
       const rep = new Date(reportedAt).getTime();
       const rec = new Date(receivedAt).getTime();
+      if (isNaN(rep) || isNaN(rec)) return 0;
       const diffMs = rec - rep;
       const diffMins = Math.floor(diffMs / 60000);
-      return diffMins > 1 ? diffMins : 0;
+      if (diffMins > 1 && diffMins <= 24 * 60) {
+        return diffMins;
+      }
+      return 0;
     } catch {
       return 0;
     }

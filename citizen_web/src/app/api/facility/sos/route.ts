@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status");
 
     const query = new URLSearchParams();
-    if (status) query.set("status", status);
+    if (status) query.set("status_filter", status);
 
     const baseUrl = process.env.FASTAPI_BACKEND_URL
       ? process.env.FASTAPI_BACKEND_URL.replace(/\/triage$/, "/facility/sos")
