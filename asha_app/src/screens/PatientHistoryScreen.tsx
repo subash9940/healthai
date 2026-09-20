@@ -80,6 +80,7 @@ export const PatientHistoryScreen: React.FC<PatientHistoryScreenProps> = ({
       {/* List */}
       <ScrollView
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {filtered.length === 0 ? (

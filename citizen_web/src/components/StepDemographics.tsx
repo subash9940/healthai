@@ -168,6 +168,7 @@ export default function StepDemographics({ data, onChange, onNext }: Props) {
                 key={item.code}
                 type="button"
                 className={`option-btn ${data.patient_sex === item.code ? 'active' : ''}`}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                 onClick={() => {
                   setTouched((prev) => ({ ...prev, sex: true }));
                   onChange({
@@ -179,8 +180,26 @@ export default function StepDemographics({ data, onChange, onNext }: Props) {
                 }}
                 aria-pressed={data.patient_sex === item.code}
               >
-                {item.code === 'male' ? '👨 ' : item.code === 'female' ? '👩 ' : '🧑 '}
-                {item.label}
+                {item.code === 'male' ? (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                    <circle cx="10" cy="14" r="5"></circle>
+                    <line x1="19" y1="5" x2="13.6" y2="10.4"></line>
+                    <polyline points="15 5 19 5 19 9"></polyline>
+                  </svg>
+                ) : item.code === 'female' ? (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                    <circle cx="12" cy="9" r="5"></circle>
+                    <line x1="12" y1="14" x2="12" y2="21"></line>
+                    <line x1="9" y1="18" x2="15" y2="18"></line>
+                  </svg>
+                ) : (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                    <circle cx="12" cy="12" r="6"></circle>
+                    <line x1="12" y1="2" x2="12" y2="6"></line>
+                    <line x1="12" y1="18" x2="12" y2="22"></line>
+                  </svg>
+                )}
+                <span>{item.label}</span>
               </button>
             ))}
           </div>
@@ -318,19 +337,30 @@ export default function StepDemographics({ data, onChange, onNext }: Props) {
               <button
                 type="button"
                 className={`option-btn ${data.is_pregnant ? 'active' : ''}`}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                 onClick={() => onChange({ ...data, is_pregnant: !data.is_pregnant, is_postpartum: false })}
                 aria-pressed={data.is_pregnant}
               >
-                🤰 {t('demographics.isPregnant') !== 'demographics.isPregnant' ? t('demographics.isPregnant') : 'Currently Pregnant'}
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                  <path d="M12 2a4 4 0 0 0-4 4v2a6 6 0 0 0-6 6v4a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-4a6 6 0 0 0-6-6V6a4 4 0 0 0-4-4z"></path>
+                  <circle cx="12" cy="14" r="3"></circle>
+                </svg>
+                <span>{t('demographics.isPregnant') !== 'demographics.isPregnant' ? t('demographics.isPregnant') : 'Currently Pregnant'}</span>
               </button>
 
               <button
                 type="button"
                 className={`option-btn ${data.is_postpartum ? 'active' : ''}`}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                 onClick={() => onChange({ ...data, is_postpartum: !data.is_postpartum, is_pregnant: false })}
                 aria-pressed={data.is_postpartum}
               >
-                👶 {t('demographics.isPostpartum') !== 'demographics.isPostpartum' ? t('demographics.isPostpartum') : 'Postpartum (<6 weeks)'}
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                  <circle cx="12" cy="8" r="5"></circle>
+                  <path d="M3 20c0-3.3 2.7-6 6-6h6c3.3 0 6 2.7 6 6"></path>
+                  <circle cx="12" cy="8" r="2"></circle>
+                </svg>
+                <span>{t('demographics.isPostpartum') !== 'demographics.isPostpartum' ? t('demographics.isPostpartum') : 'Postpartum (<6 weeks)'}</span>
               </button>
             </div>
 

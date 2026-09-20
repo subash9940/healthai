@@ -204,6 +204,23 @@ export const SYMPTOM_DEFINITIONS: SymptomTranslationItem[] = [
     },
   },
   {
+    key: 'low_risk_cough_or_cold',
+    is_danger: false,
+    category: 'respiratory',
+    names: {
+      en: 'Common cold, runny nose or sneezing',
+      hi: 'जुकाम, छींकें या गले में खराश',
+      ta: 'சாதாரண ஜலதோஷம், மூக்கு ஒழுகுதல் அல்லது தும்மல்',
+      mr: 'सर्दी, शिंका किंवा घसा खवखवणे',
+    },
+    keywords: {
+      en: ['cold', 'common cold', 'runny nose', 'sneezing', 'blocked nose', 'sore throat'],
+      hi: ['जुकाम', 'सर्दी', 'छींक', 'नाक बहना', 'गले में खराश'],
+      ta: ['ஜலதோஷம்', 'சளி', 'மூக்கு ஒழுகுதல்', 'தும்மல்'],
+      mr: ['सर्दी', 'पडसे', 'शिंका', 'नाक वाहणे', 'घसा खवखवणे'],
+    },
+  },
+  {
     key: 'cough_more_than_2_weeks',
     is_danger: false,
     category: 'respiratory',

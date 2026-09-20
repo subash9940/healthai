@@ -17,9 +17,11 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { THEME } from "../constants/theme";
 import { TRANSLATIONS } from "../constants/translations";
 import { Language, FacilityAvailabilityItem, FacilityOperationalStatus } from "../types";
+import { TouchButton } from "../components/TouchButton";
 import { FacilityService } from "../services/facilityService";
 
 interface FacilityAvailabilityScreenProps {
@@ -142,9 +144,12 @@ export const FacilityAvailabilityScreen: React.FC<FacilityAvailabilityScreenProp
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backButtonText}>← {t.btn_back}</Text>
-        </TouchableOpacity>
+        <TouchButton
+          title={`← ${t.btn_back}`}
+          variant="secondary"
+          onPress={onBack}
+          style={styles.backButton}
+        />
         <View style={styles.headerTextContainer}>
           <Text style={styles.headerTitle}>{t.facilities_title}</Text>
           <Text style={styles.headerSubtitle}>{t.facilities_subtitle}</Text>
@@ -164,7 +169,12 @@ export const FacilityAvailabilityScreen: React.FC<FacilityAvailabilityScreenProp
 
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.filterScroll}
+        >
           {[
             { id: "all", label: t.facility_filter_all || "All" },
             { id: "phc", label: "PHC" },
@@ -203,6 +213,7 @@ export const FacilityAvailabilityScreen: React.FC<FacilityAvailabilityScreenProp
         <ScrollView
           style={styles.listContainer}
           contentContainerStyle={styles.listContent}
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -246,7 +257,7 @@ export const FacilityAvailabilityScreen: React.FC<FacilityAvailabilityScreenProp
                 {/* Bed Counter Bar */}
                 <View style={styles.bedCounterContainer}>
                   <View style={styles.bedIconWrapper}>
-                    <Text style={styles.bedIcon}>🛏️</Text>
+                    <MaterialCommunityIcons name="bed" size={20} color={THEME.colors.primary} />
                   </View>
                   <View style={styles.bedTextWrapper}>
                     <Text style={styles.bedCount}>{facility.available_beds}</Text>
@@ -257,7 +268,10 @@ export const FacilityAvailabilityScreen: React.FC<FacilityAvailabilityScreenProp
                 {/* Broadcast Advisory Note */}
                 {facility.status_note && (
                   <View style={styles.noteBox}>
-                    <Text style={styles.noteTitle}>📢 {t.facility_broadcast_note || "Advisory"}:</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
+                      <MaterialCommunityIcons name="bullhorn-outline" size={15} color="#D97706" style={{ marginRight: 4 }} />
+                      <Text style={styles.noteTitle}>{t.facility_broadcast_note || "Advisory"}:</Text>
+                    </View>
                     <Text style={styles.noteText}>{facility.status_note}</Text>
                   </View>
                 )}
@@ -272,9 +286,18 @@ export const FacilityAvailabilityScreen: React.FC<FacilityAvailabilityScreenProp
             );
           })}
 
-          <View style={{ height: 40 }} />
+          <View style={{ height: 20 }} />
         </ScrollView>
       )}
+
+      {/* Bottom Action Bar */}
+      <View style={styles.bottomBar}>
+        <TouchButton
+          title={t.btn_back_to_dashboard || t.btn_back}
+          variant="secondary"
+          onPress={onBack}
+        />
+      </View>
     </View>
   );
 };
@@ -295,11 +318,6 @@ const styles = StyleSheet.create({
   backButton: {
     marginBottom: 8,
     alignSelf: "flex-start",
-  },
-  backButtonText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: THEME.colors.primary,
   },
   headerTextContainer: {},
   headerTitle: {
@@ -492,5 +510,11 @@ const styles = StyleSheet.create({
     color: "#94A3B8",
     textAlign: "right",
     marginTop: 4,
+  },
+  bottomBar: {
+    padding: 16,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
   },
 });

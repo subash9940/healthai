@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: '404 - Page Not Found',
-  description: 'The requested page could not be found on Swasthya Setu.',
+  description: 'The requested page could not be found on Jeevanya.',
 };
 
 export default function NotFound() {

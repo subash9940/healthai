@@ -1,7 +1,8 @@
 /**
  * src/screens/ReferralQueueScreen.tsx
  *
- * Frontline ASHA Referral State Machine Manager:
+ * Frontline ASHA Referral Tracking Screen:
+ * Read-only view of patient referral statuses managed by facility staff.
  * created -> in_transit -> received_at_facility -> closed
  */
 
@@ -13,7 +14,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   RefreshControl,
-  Alert,
 } from "react-native";
 import { THEME } from "../constants/theme";
 import { TRANSLATIONS } from "../constants/translations";
@@ -54,19 +54,6 @@ export const ReferralQueueScreen: React.FC<ReferralQueueScreenProps> = ({
     setRefreshing(false);
   };
 
-  const handleUpdateStatus = async (referralId: string, newStatus: ReferralStatus) => {
-    await StorageService.updateReferralStatus(
-      referralId,
-      newStatus,
-      `Status transitioned to ${newStatus} by ASHA worker`
-    );
-    await loadReferrals();
-    Alert.alert(
-      t.alert_success_title,
-      t.alert_status_changed.replace("{status}", newStatus)
-    );
-  };
-
   const filteredList = referrals.filter((r) => {
     if (filter === "all") return true;
     return r.status === filter;
@@ -90,7 +77,11 @@ export const ReferralQueueScreen: React.FC<ReferralQueueScreenProps> = ({
     <View style={styles.container}>
       {/* Top Filter Bar */}
       <View style={styles.filterBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {(
             [
               { id: "all", label: t.filter_all },
@@ -125,6 +116,7 @@ export const ReferralQueueScreen: React.FC<ReferralQueueScreenProps> = ({
       {/* Referral List */}
       <ScrollView
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {filteredList.length === 0 ? (
@@ -175,39 +167,6 @@ export const ReferralQueueScreen: React.FC<ReferralQueueScreenProps> = ({
 
                 {/* Action Instructions */}
                 <Text style={styles.actionText}>{item.recommended_action}</Text>
-
-                {/* State Machine Transition Buttons */}
-                <View style={styles.btnRow}>
-                  {item.status === "created" && (
-                    <TouchButton
-                      title={t.btn_mark_in_transit_short}
-                      variant="danger"
-                      onPress={() => handleUpdateStatus(item.referral_id, "in_transit")}
-                      style={{ flex: 1, minHeight: 40 }}
-                      textStyle={{ fontSize: 12 }}
-                    />
-                  )}
-                  {item.status === "in_transit" && (
-                    <TouchButton
-                      title={t.btn_mark_received}
-                      variant="primary"
-                      onPress={() =>
-                        handleUpdateStatus(item.referral_id, "received_at_facility")
-                      }
-                      style={{ flex: 1, minHeight: 40 }}
-                      textStyle={{ fontSize: 12 }}
-                    />
-                  )}
-                  {item.status === "received_at_facility" && (
-                    <TouchButton
-                      title={t.btn_close_referral}
-                      variant="success"
-                      onPress={() => handleUpdateStatus(item.referral_id, "closed")}
-                      style={{ flex: 1, minHeight: 40 }}
-                      textStyle={{ fontSize: 12 }}
-                    />
-                  )}
-                </View>
               </View>
             );
           })
@@ -326,9 +285,6 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
     lineHeight: 18,
     marginBottom: 8,
-  },
-  btnRow: {
-    marginTop: 4,
   },
   bottomBar: {
     padding: THEME.spacing.md,

@@ -100,7 +100,11 @@ export const PatientDemographicsScreen: React.FC<DemographicsScreenProps> = ({
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.header}>
         <Text style={styles.title}>{t.demo_title}</Text>
         <Text style={styles.subtitle}>{t.demo_subtitle}</Text>

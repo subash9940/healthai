@@ -66,7 +66,6 @@ export const ADULT_YELLOW_MEDICAL_SYMPTOMS = [
   "fever_with_headache_or_chest_pain_or_jaundice",
   "fever_in_chemo_or_hiv_or_diabetic_patient",
   "drug_overdose_or_poisoning_with_stable_vitals",
-  "headache_or_dizziness",
   "unable_to_pass_stool",
   "unable_to_pass_urine",
   "painful_bleeding_per_rectum",
@@ -188,7 +187,7 @@ function hasMajorAdultBurn(r: TriageEvaluationRequest): boolean {
 function hasLowFeverUnder101f(r: TriageEvaluationRequest): boolean {
   if (r.symptoms.includes("fever_under_101f")) return true;
   if (r.vitals && r.vitals.temperature_celsius != null) {
-    return r.vitals.temperature_celsius >= 37.5 && r.vitals.temperature_celsius < 38.3;
+    return r.vitals.temperature_celsius < 38.3;
   }
   return false;
 }

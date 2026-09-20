@@ -305,7 +305,12 @@ export default function StepSymptoms({
             }}
             aria-label={isListening ? 'Stop recording' : 'Start voice input in selected language'}
           >
-            <span style={{ animation: isListening ? 'pulse 1s infinite' : 'none' }}>🎤</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, animation: isListening ? 'pulse 1s infinite' : 'none' }}>
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+              <line x1="12" y1="19" x2="12" y2="23"></line>
+              <line x1="8" y1="23" x2="16" y2="23"></line>
+            </svg>
             <span>
               {isListening
                 ? t('symptoms.nlp.listening') !== 'symptoms.nlp.listening'
@@ -320,8 +325,13 @@ export default function StepSymptoms({
       </div>
 
       {voiceTranscript && (
-        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', padding: '8px 12px', background: 'var(--bg-subtle)', borderRadius: '4px' }}>
-          🗣️ <strong>{language === 'ta' ? 'பேசிய உரை' : language === 'hi' ? 'बोला गया विवरण' : language === 'mr' ? 'बोललेला मजकूर' : 'Spoken Voice'}:</strong> &ldquo;{voiceTranscript}&rdquo;
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', padding: '8px 12px', background: 'var(--bg-subtle)', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <div>
+            <strong>{language === 'ta' ? 'பேசிய உரை' : language === 'hi' ? 'बोला गया विवरण' : language === 'mr' ? 'बोललेला मजकूर' : 'Spoken Voice'}:</strong> &ldquo;{voiceTranscript}&rdquo;
+          </div>
         </div>
       )}
 
@@ -343,14 +353,18 @@ export default function StepSymptoms({
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
           <div>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-dark)' }}>
-              📝 {language === 'ta'
+            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-dark)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+              </svg>
+              <span>{language === 'ta'
                 ? 'நோயாளி பிரச்சனையின் மருத்துவ சுருக்கம் (Patient Problem Summary)'
                 : language === 'hi'
                 ? 'मरीज की समस्या का चिकित्सीय सारांश (Patient Problem Summary)'
                 : language === 'mr'
                 ? 'रुग्णाच्या समस्येचा वैद्यकीय सारांश (Patient Problem Summary)'
-                : 'Patient Problem Summary & Clinical Narrative'}
+                : 'Patient Problem Summary & Clinical Narrative'}</span>
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
               {language === 'ta'
@@ -371,7 +385,17 @@ export default function StepSymptoms({
               onClick={handleToggleSummaryAudio}
               aria-label="Listen to summary"
             >
-              <span>{isPlayingSummary ? '⏹️' : '🔊'}</span>
+              {isPlayingSummary ? (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                  <rect x="6" y="4" width="4" height="16"></rect>
+                  <rect x="14" y="4" width="4" height="16"></rect>
+                </svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                </svg>
+              )}
               <span>{isPlayingSummary
                 ? (language === 'ta' ? 'நிறுத்துக' : language === 'hi' ? 'रोकें' : language === 'mr' ? 'थांबवा' : 'Stop')
                 : (language === 'ta' ? 'கேளுங்கள்' : language === 'hi' ? 'सुनें' : language === 'mr' ? 'ऐका' : 'Listen')}</span>
@@ -387,11 +411,17 @@ export default function StepSymptoms({
                 background: 'var(--bg-subtle)',
                 color: 'var(--text-dark)',
                 cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
               }}
               onClick={() => updateSummaryFromState(selectedSymptoms)}
               title="Regenerate summary from selected symptoms"
             >
-              🔄 {language === 'ta' ? 'மீண்டும் உருவாக்கு' : language === 'hi' ? 'पुनः सारांश बनाएं' : language === 'mr' ? 'पुन्हा तयार करा' : 'Auto-Summarize'}
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+              </svg>
+              <span>{language === 'ta' ? 'மீண்டும் உருவாக்கு' : language === 'hi' ? 'पुनः सारांश बनाएं' : language === 'mr' ? 'पुन्हा तयार करा' : 'Auto-Summarize'}</span>
             </button>
           </div>
         </div>
@@ -424,8 +454,12 @@ export default function StepSymptoms({
           marginBottom: '16px',
         }}
       >
-        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-dark)', marginBottom: '8px' }}>
-          ⏱️ {t('symptoms.durationTitle') !== 'symptoms.durationTitle' ? t('symptoms.durationTitle') : 'How long have symptoms been present?'}
+        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-dark)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span>{t('symptoms.durationTitle') !== 'symptoms.durationTitle' ? t('symptoms.durationTitle') : 'How long have symptoms been present?'}</span>
         </div>
         <div
           style={{
@@ -487,7 +521,12 @@ export default function StepSymptoms({
           role="tab"
           aria-selected={activeCategory === 'danger'}
         >
-          🚨 {t('symptoms.categories.danger') !== 'symptoms.categories.danger' ? t('symptoms.categories.danger') : 'Urgent Danger Signs'}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <span>{t('symptoms.categories.danger') !== 'symptoms.categories.danger' ? t('symptoms.categories.danger') : 'Urgent Danger Signs'}</span>
         </button>
         <button
           type="button"
@@ -496,7 +535,10 @@ export default function StepSymptoms({
           role="tab"
           aria-selected={activeCategory === 'cardiac'}
         >
-          🫀 {language === 'ta' ? 'நெஞ்சு / இதயம்' : language === 'hi' ? 'सीना / हृदय' : language === 'mr' ? 'छाती / हृदय' : 'Chest / Heart'}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+          </svg>
+          <span>{language === 'ta' ? 'நெஞ்சு / இதயம்' : language === 'hi' ? 'सीना / हृदय' : language === 'mr' ? 'छाती / हृदय' : 'Chest / Heart'}</span>
         </button>
         <button
           type="button"
@@ -505,7 +547,11 @@ export default function StepSymptoms({
           role="tab"
           aria-selected={activeCategory === 'maternal'}
         >
-          🤰 {t('symptoms.categories.maternal') !== 'symptoms.categories.maternal' ? t('symptoms.categories.maternal') : 'Pregnancy & Childbirth'}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <path d="M12 2a4 4 0 0 0-4 4v2a6 6 0 0 0-6 6v4a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-4a6 6 0 0 0-6-6V6a4 4 0 0 0-4-4z"></path>
+            <circle cx="12" cy="14" r="3"></circle>
+          </svg>
+          <span>{t('symptoms.categories.maternal') !== 'symptoms.categories.maternal' ? t('symptoms.categories.maternal') : 'Pregnancy & Childbirth'}</span>
         </button>
         <button
           type="button"
@@ -514,7 +560,11 @@ export default function StepSymptoms({
           role="tab"
           aria-selected={activeCategory === 'respiratory'}
         >
-          🫁 {t('symptoms.categories.respiratory') !== 'symptoms.categories.respiratory' ? t('symptoms.categories.respiratory') : 'Cough & Breathing'}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <path d="M6 3v8a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"></path>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+          <span>{t('symptoms.categories.respiratory') !== 'symptoms.categories.respiratory' ? t('symptoms.categories.respiratory') : 'Cough & Breathing'}</span>
         </button>
         <button
           type="button"
@@ -523,7 +573,10 @@ export default function StepSymptoms({
           role="tab"
           aria-selected={activeCategory === 'fever'}
         >
-          🌡️ {t('symptoms.categories.fever') !== 'symptoms.categories.fever' ? t('symptoms.categories.fever') : 'Fever & Infections'}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path>
+          </svg>
+          <span>{t('symptoms.categories.fever') !== 'symptoms.categories.fever' ? t('symptoms.categories.fever') : 'Fever & Infections'}</span>
         </button>
         <button
           type="button"
@@ -532,7 +585,12 @@ export default function StepSymptoms({
           role="tab"
           aria-selected={activeCategory === 'pediatric'}
         >
-          👶 {language === 'ta' ? 'குழந்தை / சிசு' : language === 'hi' ? 'शिशु / बाल' : language === 'mr' ? 'लहान मुले' : 'Child / Infant'}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <circle cx="12" cy="8" r="5"></circle>
+            <path d="M3 20c0-3.3 2.7-6 6-6h6c3.3 0 6 2.7 6 6"></path>
+            <circle cx="12" cy="8" r="2"></circle>
+          </svg>
+          <span>{language === 'ta' ? 'குழந்தை / சிசு' : language === 'hi' ? 'शिशु / बाल' : language === 'mr' ? 'लहान मुले' : 'Child / Infant'}</span>
         </button>
       </div>
 
@@ -580,8 +638,13 @@ export default function StepSymptoms({
               </div>
               <div style={{ flex: 1 }}>
                 {s.is_danger && (
-                  <div className="danger-tag">
-                    🚨 {t('symptoms.dangerBadge') !== 'symptoms.dangerBadge' ? t('symptoms.dangerBadge') : 'Danger Sign'}
+                  <div className="danger-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                      <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <span>{t('symptoms.dangerBadge') !== 'symptoms.dangerBadge' ? t('symptoms.dangerBadge') : 'Danger Sign'}</span>
                   </div>
                 )}
                 <div className="symptom-name">{label}</div>

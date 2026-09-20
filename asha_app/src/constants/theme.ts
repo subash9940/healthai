@@ -1,7 +1,7 @@
 /**
  * src/constants/theme.ts
  *
- * Professional Clinical Health Design System for Swasthya Setu ASHA App.
+ * Professional Clinical Health Design System for Jeevanya ASHA App.
  * WCAG AAA compliant (>= 7:1 contrast ratio) for direct sunlight field readability.
  *
  * Clinical palette:

@@ -9,7 +9,7 @@ import { Language } from "../types";
 
 export const TRANSLATIONS: Record<Language, Record<string, string>> = {
   en: {
-    app_title: "Swasthya Setu — ASHA",
+    app_title: "Jeevanya — ASHA",
     app_subtitle: "Public Health Department, Govt. of Maharashtra",
     auth_title: "ASHA Worker Login",
     auth_enter_id: "ASHA Worker ID",
@@ -222,7 +222,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
   },
 
   hi: {
-    app_title: "स्वास्थ्य सेतु — आशा कार्यकर्ता",
+    app_title: "जीवन्या — आशा कार्यकर्ता",
     app_subtitle: "लोक स्वास्थ्य विभाग, महाराष्ट्र शासन",
     auth_title: "आशा कार्यकर्ता लॉगिन",
     auth_enter_id: "आशा पहचान संख्या (Worker ID)",
@@ -403,7 +403,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
   },
 
   ta: {
-    app_title: "சுவாஸ்த்ய சேது — ஆஷா",
+    app_title: "ஜீவன்யா — ஆஷா",
     app_subtitle: "பொது சுகாதாரத்துறை, மகாராஷ்டிர அரசு",
     auth_title: "ஆஷா பணியாளர் உள்நுழைவு",
     auth_enter_id: "ஆஷா பணியாளர் எண் (Worker ID)",
@@ -584,7 +584,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
   },
 
   mr: {
-    app_title: "स्वास्थ्य सेतू — आशा सेविका",
+    app_title: "जीवन्या — आशा सेविका",
     app_subtitle: "सार्वजनिक आरोग्य विभाग, महाराष्ट्र शासन",
     auth_title: "आशा सेविका लॉगिन",
     auth_enter_id: "आशा ओळख क्रमांक (Worker ID)",

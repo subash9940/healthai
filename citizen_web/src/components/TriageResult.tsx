@@ -185,12 +185,6 @@ export default function TriageResult({ result, onRestart }: Props) {
     window.speechSynthesis.speak(utterance);
   };
 
-  const handlePrint = () => {
-    if (typeof window !== 'undefined') {
-      window.print();
-    }
-  };
-
   return (
     <div className="result-card">
       {/* Header Banner */}
@@ -249,16 +243,33 @@ export default function TriageResult({ result, onRestart }: Props) {
 
       {/* Severity Color Strip */}
       <div className={`result-severity-banner ${urgencyClass}`} role="status">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '24px' }}>
-            {result.urgency === 'EMERGENCY'
-              ? '🚨'
-              : result.urgency === 'HIGH'
-              ? '⚠️'
-              : result.urgency === 'MEDIUM'
-              ? '📋'
-              : '✅'}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+            {result.urgency === 'EMERGENCY' ? (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            ) : result.urgency === 'HIGH' ? (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+            ) : result.urgency === 'MEDIUM' ? (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            ) : (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+            )}
+          </div>
           <div>
             <div className="severity-heading">
               {urgencyLabel}
@@ -279,14 +290,18 @@ export default function TriageResult({ result, onRestart }: Props) {
             borderBottom: '1px solid var(--border-light)',
           }}
         >
-          <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '4px' }}>
-            📝 {language === 'ta'
+          <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+            </svg>
+            <span>{language === 'ta'
               ? 'நோயாளி பிரச்சனை சுருக்கம் (Patient Problem Summary)'
               : language === 'hi'
               ? 'मरीज की समस्या का सारांश (Patient Problem Summary)'
               : language === 'mr'
               ? 'रुग्णाच्या समस्येचा सारांश (Patient Problem Summary)'
-              : 'Clinical Problem Summary & Patient Narrative'}
+              : 'Clinical Problem Summary & Patient Narrative'}</span>
           </div>
           <div style={{ fontSize: '14px', lineHeight: 1.6, color: 'var(--text-dark)', fontWeight: 500 }}>
             {result.problem_summary}
@@ -331,7 +346,17 @@ export default function TriageResult({ result, onRestart }: Props) {
             onClick={handleSpeakAdvice}
             aria-label={isPlayingAudio ? 'Stop voice reading' : 'Listen to clinical advice in your language'}
           >
-            <span>{isPlayingAudio ? '⏹️' : '🔊'}</span>
+            {isPlayingAudio ? (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                <rect x="6" y="4" width="4" height="16"></rect>
+                <rect x="14" y="4" width="4" height="16"></rect>
+              </svg>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+              </svg>
+            )}
             <span>
               {isPlayingAudio
                 ? (language === 'ta' ? 'ஆடியோ வாசிப்பை நிறுத்துக' : language === 'hi' ? 'ऑडियो रोकें' : language === 'mr' ? 'ऑडिओ थांबवा' : 'Stop Audio Readout')
@@ -382,9 +407,16 @@ export default function TriageResult({ result, onRestart }: Props) {
           </div>
           <div className="action-box-desc">
             {result.danger_signs_present.length > 0 ? (
-              <span style={{ color: 'var(--urgency-emergency)', fontWeight: 600 }}>
-                🚨 {result.danger_signs_present.length}{' '}
-                {language === 'ta' ? 'ஆபத்து அறிகுறிகள் கண்டறியப்பட்டன.' : language === 'hi' ? 'खतरे के लक्षण पाए गए।' : language === 'mr' ? 'धोक्याची लक्षणे आढळली.' : 'danger signs triggered this protocol.'}
+              <span style={{ color: 'var(--urgency-emergency)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                  <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <span>
+                  {result.danger_signs_present.length}{' '}
+                  {language === 'ta' ? 'ஆபத்து அறிகுறிகள் கண்டறியப்பட்டன.' : language === 'hi' ? 'खतरे के लक्षण पाए गए।' : language === 'mr' ? 'धोक्याची लक्षणे आढळली.' : 'danger signs triggered this protocol.'}
+                </span>
               </span>
             ) : (
               <span>National Health Mission evidence-based clinical rule.</span>
@@ -417,32 +449,38 @@ export default function TriageResult({ result, onRestart }: Props) {
               : 'Immediate transport required? Call ambulance services:'}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <a href="tel:108" className="emergency-phone-link">
-              📞 Call 108
+            <a href="tel:108" className="emergency-phone-link" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+              </svg>
+              <span>Call 108</span>
             </a>
-            <a href="tel:104" className="helpline-phone-link">
-              ℹ️ Call 104
+            <a href="tel:104" className="helpline-phone-link" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              <span>Call 104</span>
             </a>
           </div>
         </div>
       )}
 
       {/* Action Buttons */}
-      <div style={{ padding: '20px', background: 'var(--bg-surface)', display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={handlePrint}
-        >
-          🖨️ {language === 'ta' ? 'பரிந்துரை சீட்டை அச்சிடுக' : language === 'hi' ? 'रेफरल पर्ची प्रिंट करें' : language === 'mr' ? 'रेफरल स्लिप प्रिंट करा' : 'Print Referral Slip'}
-        </button>
-
+      <div style={{ padding: '20px', background: 'var(--bg-surface)', display: 'flex', justifyContent: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
         <button
           type="button"
           className="btn-primary"
           onClick={onRestart}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
         >
-          🔄 {language === 'ta' ? 'புதிய பரிசோதனையைத் தொடங்கு' : language === 'hi' ? 'नया आकलन शुरू करें' : language === 'mr' ? 'नवीन तपासणी सुरू करा' : 'Start New Assessment'}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <polyline points="23 20 23 14 17 14"></polyline>
+            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path>
+          </svg>
+          <span>{language === 'ta' ? 'புதிய பரிசோதனையைத் தொடங்கு' : language === 'hi' ? 'नया आकलन शुरू करें' : language === 'mr' ? 'नवीन तपासणी सुरू करा' : 'Start New Assessment'}</span>
         </button>
       </div>
     </div>

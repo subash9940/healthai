@@ -25,6 +25,7 @@ import {
   Linking,
   ActivityIndicator,
 } from "react-native";
+import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { THEME } from "../constants/theme";
 import { TRANSLATIONS } from "../constants/translations";
 import { Language, AshaWorkerSession, ReferralRecord, SecurityAuditLog } from "../types";
@@ -121,25 +122,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     }
   };
 
-  const handleUpdateStatus = async (referralId: string, nextStatus: "in_transit" | "received_at_facility" | "closed") => {
-    let note = `Status updated to ${nextStatus}`;
-    if (nextStatus === "in_transit") {
-      note = "108 Ambulance dispatched / patient in transit";
-    } else if (nextStatus === "received_at_facility") {
-      note = "Patient received and admitted at facility triage desk";
-    } else if (nextStatus === "closed") {
-      note = "Treatment completed / referral closed";
-    }
-
-    await StorageService.updateReferralStatus(referralId, nextStatus, note);
-    await StorageService.logSecurityEvent(
-      "REFERRAL_STATUS_UPDATED",
-      session.worker_id,
-      `Referral [${referralId}] status updated to ${nextStatus}`
-    );
-    await loadDashboardData();
-  };
-
   const handleCallEmergency = (phone: string = "108") => {
     Linking.openURL(`tel:${phone}`).catch(() => {
       Alert.alert("Emergency Dispatch", `Call ${phone} for immediate medical ambulance.`);
@@ -232,6 +214,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       {/* 1. Worker Profile & 108 Emergency Bar */}
@@ -262,7 +245,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             onPress={() => handleCallEmergency("108")}
             activeOpacity={0.8}
           >
-            <Text style={styles.call108Icon}>📞</Text>
+            <Ionicons name="call" size={18} color="#B91C1C" />
             <View style={{ marginLeft: 8 }}>
               <Text style={styles.call108Title}>108 Emergency Ambulance</Text>
               <Text style={styles.call108Sub}>Toll-Free Direct Dispatch</Text>
@@ -274,7 +257,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             onPress={() => handleCallEmergency("102")}
             activeOpacity={0.8}
           >
-            <Text style={styles.call102Icon}>🚑</Text>
+            <MaterialCommunityIcons name="ambulance" size={18} color="#92400E" />
             <View style={{ marginLeft: 6 }}>
               <Text style={styles.call102Title}>102 Janani Express</Text>
               <Text style={styles.call102Sub}>Maternal Transport</Text>
@@ -334,9 +317,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           {isTestingSync ? (
             <ActivityIndicator size="small" color="#0F766E" />
           ) : (
-            <Text style={styles.testSyncBtnText}>
-              ⚡ {t.telemetry_test_btn || "Test Sync Connection"}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <MaterialCommunityIcons name="lightning-bolt" size={16} color="#0F766E" style={{ marginRight: 4 }} />
+              <Text style={styles.testSyncBtnText}>
+                {t.telemetry_test_btn || "Test Sync Connection"}
+              </Text>
+            </View>
           )}
         </TouchableOpacity>
       </View>
@@ -348,7 +334,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         activeOpacity={0.85}
       >
         <View style={styles.screeningBtnContent}>
-          <Text style={styles.screeningBtnIcon}>🩺</Text>
+          <View style={styles.screeningBtnIconCircle}>
+            <MaterialCommunityIcons name="stethoscope" size={24} color="#0F766E" />
+          </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.screeningBtnTitle}>
               {t.dash_btn_start || "Start New Patient Screening"}
@@ -357,7 +345,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               Full clinical triage: IMNCI, Maternal Module 6/7 & Adult Fast-Track
             </Text>
           </View>
-          <Text style={styles.screeningArrow}>→</Text>
+          <Ionicons name="arrow-forward" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
         </View>
       </TouchableOpacity>
 
@@ -369,7 +357,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       >
         <View style={styles.facilityLauncherContent}>
           <View style={styles.facilityIconCircle}>
-            <Text style={styles.facilityIconText}>🏥</Text>
+            <MaterialCommunityIcons name="hospital-building" size={22} color="#0284C7" />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <View style={styles.facilityLauncherTitleRow}>
@@ -385,7 +373,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               {t.facilities_nav_desc || "Check real-time PHC, CHC & SDH bed capacity before referral"}
             </Text>
           </View>
-          <Text style={styles.facilityLauncherArrow}>→</Text>
+          <Ionicons name="arrow-forward" size={20} color="#0284C7" />
         </View>
       </TouchableOpacity>
 
@@ -477,45 +465,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               <View style={styles.facilityBox}>
                 <Text style={styles.facilityLabel}>Target Facility: </Text>
                 <Text style={styles.facilityName}>{ref.target_facility || "PHC Ghodegaon"}</Text>
-              </View>
-
-              {/* State Machine Action Controls */}
-              <View style={styles.stateMachineButtonsRow}>
-                {ref.status === "created" && (
-                  <TouchableOpacity
-                    style={styles.actionBtnTransit}
-                    onPress={() => handleUpdateStatus(ref.referral_id, "in_transit")}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.actionBtnTransitText}>🚑 Dispatch 108 (Mark In-Transit)</Text>
-                  </TouchableOpacity>
-                )}
-
-                {ref.status === "in_transit" && (
-                  <TouchableOpacity
-                    style={styles.actionBtnReceive}
-                    onPress={() => handleUpdateStatus(ref.referral_id, "received_at_facility")}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.actionBtnReceiveText}>🏥 Mark Admitted at PHC</Text>
-                  </TouchableOpacity>
-                )}
-
-                {ref.status === "received_at_facility" && (
-                  <TouchableOpacity
-                    style={styles.actionBtnClose}
-                    onPress={() => handleUpdateStatus(ref.referral_id, "closed")}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.actionBtnCloseText}>✓ Discharge / Close Case</Text>
-                  </TouchableOpacity>
-                )}
-
-                {ref.status === "closed" && (
-                  <View style={styles.caseClosedBadge}>
-                    <Text style={styles.caseClosedText}>✓ Treatment completed at facility</Text>
-                  </View>
-                )}
               </View>
             </View>
           );
@@ -841,8 +790,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  screeningBtnIcon: {
-    fontSize: 26,
+  screeningBtnIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
   },
   screeningBtnTitle: {
     fontSize: 16,
@@ -1065,57 +1019,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: THEME.colors.textPrimary,
     fontWeight: "600",
-  },
-  stateMachineButtonsRow: {
-    marginTop: 8,
-  },
-  actionBtnTransit: {
-    backgroundColor: "#FEF3C7",
-    borderWidth: 1,
-    borderColor: "#F59E0B",
-    borderRadius: THEME.borderRadius.md,
-    paddingVertical: 7,
-    alignItems: "center",
-  },
-  actionBtnTransitText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#92400E",
-  },
-  actionBtnReceive: {
-    backgroundColor: "#E0F2FE",
-    borderWidth: 1,
-    borderColor: "#0284C7",
-    borderRadius: THEME.borderRadius.md,
-    paddingVertical: 7,
-    alignItems: "center",
-  },
-  actionBtnReceiveText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#0369A1",
-  },
-  actionBtnClose: {
-    backgroundColor: "#DCFCE7",
-    borderWidth: 1,
-    borderColor: "#16A34A",
-    borderRadius: THEME.borderRadius.md,
-    paddingVertical: 7,
-    alignItems: "center",
-  },
-  actionBtnCloseText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#166534",
-  },
-  caseClosedBadge: {
-    paddingVertical: 4,
-    alignItems: "center",
-  },
-  caseClosedText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#16A34A",
   },
 
   // 5. Supervisor & Admin Section

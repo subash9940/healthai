@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Terms of Use & Clinical Protocols',
-  description: 'Evidence-backed clinical triage protocols, usage terms, and liability disclosures for Swasthya Setu.',
+  description: 'Evidence-backed clinical triage protocols, usage terms, and liability disclosures for Jeevanya.',
 };
 
 export default function TermsPage() {
@@ -23,7 +23,7 @@ export default function TermsPage() {
             1. Clinical Decision Support System (CDSS)
           </h3>
           <p style={{ color: 'var(--text-body)', lineHeight: 1.7, fontSize: '14px' }}>
-            Swasthya Setu operates as a Clinical Decision Support System based on verified Ministry of Health &amp; Family Welfare (MoHFW), National Health Mission (NHM), IMNCI, and SBA clinical protocols. It assists in prioritizing care urgency and facility routing.
+            Jeevanya operates as a Clinical Decision Support System based on verified Ministry of Health &amp; Family Welfare (MoHFW), National Health Mission (NHM), IMNCI, and SBA clinical protocols. It assists in prioritizing care urgency and facility routing.
           </p>
         </section>
 

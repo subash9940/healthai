@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Privacy & Clinical Data Governance',
-  description: 'Swasthya Setu data protection, offline-first client-side evaluation, and patient confidentiality standards.',
+  description: 'Jeevanya data protection, offline-first client-side evaluation, and patient confidentiality standards.',
 };
 
 export default function PrivacyPage() {
@@ -23,7 +23,7 @@ export default function PrivacyPage() {
             1. Zero-Storage Client-Side Processing
           </h3>
           <p style={{ color: 'var(--text-body)', lineHeight: 1.7, fontSize: '14px' }}>
-            Swasthya Setu is built with an offline-first architecture. All initial rule evaluations and danger sign detections occur directly in your browser using deterministic algorithms. No personally identifiable medical records or phone numbers are sold or tracked.
+            Jeevanya is built with an offline-first architecture. All initial rule evaluations and danger sign detections occur directly in your browser using deterministic algorithms. No personally identifiable medical records or phone numbers are sold or tracked.
           </p>
         </section>
 
@@ -42,8 +42,8 @@ export default function PrivacyPage() {
           </h3>
           <p style={{ color: 'var(--text-body)', lineHeight: 1.7, fontSize: '14px' }}>
             For questions regarding privacy, security audits, or data governance, reach out to our grievance team at{' '}
-            <a href="mailto:privacy-swasthya@nhm.gov.in" style={{ fontWeight: 600 }}>
-              privacy-swasthya@nhm.gov.in
+            <a href="mailto:privacy-jeevanya@nhm.gov.in" style={{ fontWeight: 600 }}>
+              privacy-jeevanya@nhm.gov.in
             </a>{' '}
             or call the National Health Helpline at{' '}
             <a href="tel:104" style={{ fontWeight: 600 }}>

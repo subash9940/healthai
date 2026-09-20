@@ -1,7 +1,7 @@
 /**
  * App.tsx
  *
- * Production ASHA Worker Field Health Application (Swasthya Setu).
+ * Production ASHA Worker Field Health Application (Jeevanya).
  * 100% Offline Clinical Rule Engine, Multi-Language, Referral State Machine.
  */
 

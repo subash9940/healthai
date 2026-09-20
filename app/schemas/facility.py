@@ -12,7 +12,7 @@ class FacilityRegisterRequest(BaseModel):
     name: str
     phone_or_username: str
     mpin: str
-    role: str = "medical_officer"
+    role: str = "phc_staff"
     facility_id: str
 
 
