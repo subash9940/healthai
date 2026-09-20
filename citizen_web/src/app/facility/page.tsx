@@ -13,6 +13,31 @@ interface StaffUser {
   facility_level?: string;
 }
 
+interface SosAlertItem {
+  id: string;
+  client_alert_id: string;
+  reported_at: string;
+  received_at: string;
+  patient_name: string;
+  patient_phone: string;
+  patient_village: string;
+  patient_age?: number | null;
+  patient_sex?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  accuracy?: number | null;
+  facility_id?: string | null;
+  facility_name?: string | null;
+  channel: string;
+  status: 'open' | 'acknowledged' | 'resolved' | string;
+  repeat_count: number;
+  acknowledged_at?: string | null;
+  acknowledged_by?: string | null;
+  resolved_at?: string | null;
+  resolved_by?: string | null;
+  resolution_notes?: string | null;
+}
+
 interface FacilityStatus {
   facility_id: string;
   facility_name: string;
@@ -133,6 +158,16 @@ export default function FacilityDashboard() {
   const [editNote, setEditNote] = useState<string>('');
   const [isEditingStatus, setIsEditingStatus] = useState(false);
 
+  // SOS Alerts state
+  const [sosAlerts, setSosAlerts] = useState<SosAlertItem[]>([]);
+  const [sosLoading, setSosLoading] = useState(false);
+  const [sosError, setSosError] = useState('');
+  const [resolvingAlertId, setResolvingAlertId] = useState<string | null>(null);
+  const [resolveNotes, setResolveNotes] = useState('');
+  const [sosActionLoading, setSosActionLoading] = useState<string | null>(null);
+
+  const openSosCount = sosAlerts.filter((a) => a.status === 'open').length;
+
   // Check saved session & fetch facility directory on mount
   useEffect(() => {
     try {
@@ -215,13 +250,118 @@ export default function FacilityDashboard() {
     }
   }, []);
 
-  // When token is set, fetch queue & facility status
+  // Fetch facility SOS alerts
+  const fetchSosAlerts = useCallback(async (authToken: string) => {
+    try {
+      const res = await fetch('/api/facility/sos', {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setSosAlerts(data);
+          setSosError('');
+        }
+      } else if (res.status === 401) {
+        // Session expired or invalid
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setSosError(errData?.error || 'Failed to fetch SOS alerts');
+      }
+    } catch (err: any) {
+      setSosError('SOS service unavailable');
+    }
+  }, []);
+
+  // When token is set, fetch queue, facility status & start SOS polling
   useEffect(() => {
     if (token) {
       fetchReferrals(token);
       fetchFacilityStatus(token);
+      fetchSosAlerts(token);
+
+      const interval = setInterval(() => {
+        fetchSosAlerts(token);
+      }, 5000);
+
+      return () => clearInterval(interval);
     }
-  }, [token, fetchReferrals, fetchFacilityStatus]);
+  }, [token, fetchReferrals, fetchFacilityStatus, fetchSosAlerts]);
+
+  // Handle SOS Alert Acknowledge
+  const handleAcknowledgeSos = async (alertId: string) => {
+    if (!token) return;
+    setSosActionLoading(alertId);
+    try {
+      const res = await fetch(`/api/facility/sos/${alertId}/acknowledge`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (res.status === 409) {
+        setActionMessage({ text: 'SOS alert already handled by another user', type: 'error' });
+        await fetchSosAlerts(token);
+        return;
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || 'Failed to acknowledge alert');
+      }
+
+      setActionMessage({ text: '✓ SOS alert acknowledged', type: 'success' });
+      await fetchSosAlerts(token);
+    } catch (err: any) {
+      setActionMessage({ text: `Error acknowledging alert: ${err?.message}`, type: 'error' });
+    } finally {
+      setSosActionLoading(null);
+    }
+  };
+
+  // Handle SOS Alert Resolve
+  const handleResolveSos = async (alertId: string) => {
+    if (!token) return;
+    setSosActionLoading(alertId);
+    try {
+      const res = await fetch(`/api/facility/sos/${alertId}/resolve`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          notes: resolveNotes.trim() || undefined,
+        }),
+      });
+
+      if (res.status === 409) {
+        setActionMessage({ text: 'SOS alert already handled by another user', type: 'error' });
+        setResolvingAlertId(null);
+        setResolveNotes('');
+        await fetchSosAlerts(token);
+        return;
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || 'Failed to resolve alert');
+      }
+
+      setActionMessage({ text: '✓ SOS alert resolved', type: 'success' });
+      setResolvingAlertId(null);
+      setResolveNotes('');
+      await fetchSosAlerts(token);
+    } catch (err: any) {
+      setActionMessage({ text: `Error resolving alert: ${err?.message}`, type: 'error' });
+    } finally {
+      setSosActionLoading(null);
+    }
+  };
 
   const handleUpdateFacilityStatus = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -418,6 +558,37 @@ export default function FacilityDashboard() {
   };
 
   const filteredQueue = queue.filter((item) => (filter === 'ALL' ? true : item.urgency === filter));
+
+  const formatTimeAgo = (isoDateString: string) => {
+    try {
+      const now = new Date();
+      const past = new Date(isoDateString);
+      const diffMs = Math.max(0, now.getTime() - past.getTime());
+      const diffMins = Math.floor(diffMs / 60000);
+      if (diffMins < 1) return 'Just now';
+      if (diffMins === 1) return '1 min ago';
+      if (diffMins < 60) return `${diffMins} min ago`;
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours === 1) return '1 hour ago';
+      if (diffHours < 24) return `${diffHours} hours ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      return diffDays === 1 ? '1 day ago' : `${diffDays} days ago`;
+    } catch {
+      return isoDateString;
+    }
+  };
+
+  const getReportedEarlierDiffMins = (reportedAt: string, receivedAt: string) => {
+    try {
+      const rep = new Date(reportedAt).getTime();
+      const rec = new Date(receivedAt).getTime();
+      const diffMs = rec - rep;
+      const diffMins = Math.floor(diffMs / 60000);
+      return diffMins > 1 ? diffMins : 0;
+    } catch {
+      return 0;
+    }
+  };
 
   const handleCopyFhir = (item: ReferralItem) => {
     const fhirBundle = {
@@ -1067,6 +1238,357 @@ export default function FacilityDashboard() {
             {actionMessage.text}
           </div>
         )}
+
+        {/* SOS Emergency Alerts Section */}
+        <div
+          style={{
+            background: openSosCount > 0 ? '#fef2f2' : '#ffffff',
+            borderRadius: 'var(--radius-sm)',
+            border: openSosCount > 0 ? '2px solid #ef4444' : '1px solid var(--border-medium)',
+            padding: '16px',
+            marginBottom: '20px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '12px',
+              flexWrap: 'wrap',
+              gap: '8px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '20px' }}>🚨</span>
+              <h2
+                style={{
+                  fontSize: '16px',
+                  fontWeight: 800,
+                  margin: 0,
+                  color: openSosCount > 0 ? '#b91c1c' : 'var(--text-dark)',
+                }}
+              >
+                Emergency SOS Alerts
+              </h2>
+              {openSosCount > 0 && (
+                <span
+                  style={{
+                    background: '#ef4444',
+                    color: '#ffffff',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                  }}
+                >
+                  {openSosCount} OPEN
+                </span>
+              )}
+            </div>
+            {sosError && (
+              <span style={{ fontSize: '12px', color: '#b91c1c', fontWeight: 600 }}>
+                {sosError}
+              </span>
+            )}
+          </div>
+
+          {openSosCount > 0 && (
+            <div
+              style={{
+                background: '#fee2e2',
+                border: '1px solid #f87171',
+                borderRadius: 'var(--radius-xs)',
+                padding: '10px 14px',
+                marginBottom: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                color: '#991b1b',
+                fontWeight: 700,
+                fontSize: '13px',
+              }}
+            >
+              <span>⚠️</span>
+              <span>
+                Active emergency distress alerts require immediate triage and attention ({openSosCount} open).
+              </span>
+            </div>
+          )}
+
+          {sosAlerts.length === 0 ? (
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '20px',
+                color: 'var(--text-muted)',
+                fontSize: '13px',
+                background: 'var(--bg-subtle)',
+                borderRadius: 'var(--radius-xs)',
+              }}
+            >
+              No active or past SOS alerts for this facility.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {sosAlerts.map((alert) => {
+                const isAlertOpen = alert.status === 'open';
+                const isAlertAck = alert.status === 'acknowledged';
+                const isAlertResolved = alert.status === 'resolved';
+                const earlierDiff = getReportedEarlierDiffMins(alert.reported_at, alert.received_at);
+                const isActioning = sosActionLoading === alert.id;
+
+                return (
+                  <div
+                    key={alert.id}
+                    style={{
+                      border: isAlertOpen
+                        ? '1.5px solid #ef4444'
+                        : isAlertAck
+                        ? '1.5px solid #f59e0b'
+                        : '1px solid var(--border-medium)',
+                      borderRadius: 'var(--radius-xs)',
+                      background: isAlertOpen ? '#fff5f5' : '#ffffff',
+                      padding: '14px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        flexWrap: 'wrap',
+                        gap: '8px',
+                        marginBottom: '8px',
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 800, fontSize: '15px', color: 'var(--text-dark)' }}>
+                            {alert.patient_name || 'Anonymous Citizen'}
+                          </span>
+                          {/* Unrouted badge */}
+                          {!alert.facility_id && (
+                            <span
+                              style={{
+                                background: '#374151',
+                                color: '#ffffff',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontSize: '10px',
+                                fontWeight: 800,
+                              }}
+                            >
+                              UNROUTED
+                            </span>
+                          )}
+                          {/* Repeat distress count badge */}
+                          {alert.repeat_count > 1 && (
+                            <span
+                              style={{
+                                background: '#dc2626',
+                                color: '#ffffff',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                fontWeight: 800,
+                              }}
+                            >
+                              Tapped {alert.repeat_count} times
+                            </span>
+                          )}
+                          {/* Status badge */}
+                          <span
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: '10px',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              textTransform: 'uppercase',
+                              background: isAlertOpen
+                                ? '#fee2e2'
+                                : isAlertAck
+                                ? '#fef3c7'
+                                : '#dcfce7',
+                              color: isAlertOpen
+                                ? '#b91c1c'
+                                : isAlertAck
+                                ? '#92400e'
+                                : '#166534',
+                            }}
+                          >
+                            {alert.status}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            color: 'var(--text-muted)',
+                            marginTop: '3px',
+                            display: 'flex',
+                            gap: '12px',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          {alert.patient_village && <span>Village: <strong>{alert.patient_village}</strong></span>}
+                          {(alert.patient_age !== undefined && alert.patient_age !== null) && (
+                            <span>Age: <strong>{alert.patient_age}</strong></span>
+                          )}
+                          {alert.patient_sex && <span>Sex: <strong>{alert.patient_sex}</strong></span>}
+                          {alert.patient_phone && (
+                            <span>
+                              Phone:{' '}
+                              <a
+                                href={`tel:${alert.patient_phone}`}
+                                style={{ color: 'var(--color-primary)', fontWeight: 700, textDecoration: 'underline' }}
+                              >
+                                {alert.patient_phone}
+                              </a>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ textAlign: 'right', fontSize: '12px', color: 'var(--text-muted)' }}>
+                        <div>Received: <strong>{formatTimeAgo(alert.received_at)}</strong></div>
+                        {earlierDiff > 0 && (
+                          <div style={{ color: '#d97706', fontSize: '11px', fontWeight: 600, marginTop: '2px' }}>
+                            (reported {earlierDiff} min earlier)
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Location link if lat/lng */}
+                    {alert.lat !== undefined && alert.lat !== null && alert.lng !== undefined && alert.lng !== null && (
+                      <div style={{ marginBottom: '10px', fontSize: '12px' }}>
+                        📍{' '}
+                        <a
+                          href={`https://maps.google.com/?q=${alert.lat},${alert.lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'var(--color-primary)', fontWeight: 700, textDecoration: 'underline' }}
+                        >
+                          View Patient Coordinates on Google Maps ({alert.lat.toFixed(4)}, {alert.lng.toFixed(4)})
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap' }}>
+                      {isAlertOpen && (
+                        <button
+                          type="button"
+                          onClick={() => handleAcknowledgeSos(alert.id)}
+                          disabled={isActioning}
+                          style={{
+                            padding: '6px 14px',
+                            background: '#f59e0b',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: 'var(--radius-xs)',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: isActioning ? 'not-allowed' : 'pointer',
+                            opacity: isActioning ? 0.7 : 1,
+                          }}
+                        >
+                          {isActioning ? 'Acknowledging...' : 'Acknowledge SOS'}
+                        </button>
+                      )}
+
+                      {(isAlertOpen || isAlertAck) && (
+                        <>
+                          {resolvingAlertId === alert.id ? (
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', marginTop: '6px' }}>
+                              <input
+                                type="text"
+                                placeholder="Resolution notes (optional)..."
+                                value={resolveNotes}
+                                onChange={(e) => setResolveNotes(e.target.value)}
+                                style={{
+                                  flex: 1,
+                                  padding: '6px 10px',
+                                  fontSize: '12px',
+                                  border: '1px solid var(--border-medium)',
+                                  borderRadius: 'var(--radius-xs)',
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleResolveSos(alert.id)}
+                                disabled={isActioning}
+                                style={{
+                                  padding: '6px 14px',
+                                  background: '#16a34a',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  borderRadius: 'var(--radius-xs)',
+                                  fontSize: '12px',
+                                  fontWeight: 700,
+                                  cursor: isActioning ? 'not-allowed' : 'pointer',
+                                }}
+                              >
+                                {isActioning ? 'Saving...' : 'Confirm Resolve'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setResolvingAlertId(null);
+                                  setResolveNotes('');
+                                }}
+                                style={{
+                                  padding: '6px 10px',
+                                  background: 'var(--bg-subtle)',
+                                  color: 'var(--text-dark)',
+                                  border: '1px solid var(--border-medium)',
+                                  borderRadius: 'var(--radius-xs)',
+                                  fontSize: '12px',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setResolvingAlertId(alert.id);
+                                setResolveNotes('');
+                              }}
+                              disabled={isActioning}
+                              style={{
+                                padding: '6px 14px',
+                                background: '#16a34a',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: 'var(--radius-xs)',
+                                fontSize: '12px',
+                                fontWeight: 700,
+                                cursor: isActioning ? 'not-allowed' : 'pointer',
+                                opacity: isActioning ? 0.7 : 1,
+                              }}
+                            >
+                              Resolve
+                            </button>
+                          )}
+                        </>
+                      )}
+
+                      {isAlertResolved && (
+                        <div style={{ fontSize: '12px', color: '#166534', fontWeight: 600 }}>
+                          ✓ Resolved {alert.resolved_at ? formatTimeAgo(alert.resolved_at) : ''}
+                          {alert.resolution_notes ? ` (${alert.resolution_notes})` : ''}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* Facility Operational Availability & Bed Capacity Panel */}
         <div
