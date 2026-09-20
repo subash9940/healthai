@@ -8,7 +8,8 @@
 
 import { StorageService } from "./storageService";
 
-const BACKEND_URL = "http://10.0.2.2:8001"; // Default Android emulator host loopback or localhost
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? "http://10.0.2.2:8001";
+const SYNC_KEY = process.env.EXPO_PUBLIC_SYNC_KEY ?? "";
 
 export interface SyncResult {
   success: boolean;
@@ -27,8 +28,9 @@ export const SyncService = {
 
       const pendingPatients = patients.filter((p) => !p.synced);
       const pendingReferrals = referrals.filter((r) => !r.synced);
+      const totalPending = pendingPatients.length + pendingReferrals.length;
 
-      if (pendingPatients.length === 0 && pendingReferrals.length === 0) {
+      if (totalPending === 0) {
         return {
           success: true,
           syncedCount: 0,
@@ -36,7 +38,7 @@ export const SyncService = {
         };
       }
 
-      // Check server connectivity with short 2s timeout
+      // Check server connectivity with short timeout
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 2500);
 
@@ -57,35 +59,59 @@ export const SyncService = {
 
           const pushRes = await fetch(`${BACKEND_URL}/sync`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...(SYNC_KEY ? { "X-Sync-Key": SYNC_KEY } : {}),
+            },
             body: JSON.stringify(syncPayload),
           });
 
           if (pushRes.ok) {
-            const syncedPatientIds = pendingPatients.map((p) => p.patient.patient_id);
-            const syncedReferralIds = pendingReferrals.map((r) => r.referral_id);
-            await StorageService.markRecordsAsSynced(syncedPatientIds, syncedReferralIds);
+            const data = await pushRes.json();
+            const records: Array<{ id: string; status: string; type: string }> = data.records || [];
+
+            // Mark synced ONLY the IDs returned accepted or duplicate (D10)
+            const acceptedPatientIds = records
+              .filter((r) => r.type === "patient" && (r.status === "accepted" || r.status === "duplicate"))
+              .map((r) => r.id);
+
+            const acceptedReferralIds = records
+              .filter((r) => r.type === "referral" && (r.status === "accepted" || r.status === "duplicate"))
+              .map((r) => r.id);
+
+            await StorageService.markRecordsAsSynced(acceptedPatientIds, acceptedReferralIds);
+
+            const syncedCount = acceptedPatientIds.length + acceptedReferralIds.length;
 
             return {
-              success: true,
-              syncedCount: pendingPatients.length + pendingReferrals.length,
-              message: `Successfully synchronized ${pendingPatients.length + pendingReferrals.length} records.`,
+              success: data.success,
+              syncedCount: syncedCount,
+              message: data.message || `Successfully synchronized ${syncedCount} records.`,
+            };
+          } else {
+            return {
+              success: false,
+              syncedCount: 0,
+              message: `${totalPending} records waiting to sync`,
+              error: `Server responded with status ${pushRes.status}`,
             };
           }
         }
-      } catch {
+      } catch (e: any) {
         // Backend offline / network unreachable
+        return {
+          success: false,
+          syncedCount: 0,
+          message: `${totalPending} records waiting to sync`,
+          error: e?.message || "Server unreachable",
+        };
       }
 
-      // Offline mock sync success simulation for demo resilience
-      const syncedPatientIds = pendingPatients.map((p) => p.patient.patient_id);
-      const syncedReferralIds = pendingReferrals.map((r) => r.referral_id);
-      await StorageService.markRecordsAsSynced(syncedPatientIds, syncedReferralIds);
-
       return {
-        success: true,
-        syncedCount: pendingPatients.length + pendingReferrals.length,
-        message: `Offline Sync Outbox cleared (${pendingPatients.length + pendingReferrals.length} items verified locally).`,
+        success: false,
+        syncedCount: 0,
+        message: `${totalPending} records waiting to sync`,
+        error: "Server unreachable",
       };
     } catch (e: any) {
       return {
