@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict rWCs7THR9uXVhx169O0PgykmhFKfje4LfybkH58phcg6NzStLMSnGrem409Uevy
+\restrict MEVms4eMB5xTHVhyYLLCyTLsHnRRFdnYcLvZepU2jM9SyjQ5bvd7eAsk83W5xbb
 
 -- Dumped from database version 18.6 (Ubuntu 18.6-0ubuntu0.26.04.1)
 -- Dumped by pg_dump version 18.6 (Ubuntu 18.6-0ubuntu0.26.04.1)
@@ -27,27 +27,26 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 
 
 --
--- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: 
+-- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
 
 
 --
--- Name: facility_level; Type: TYPE; Schema: public; Owner: subash
+-- Name: facility_level; Type: TYPE; Schema: public; Owner: -
 --
 
 CREATE TYPE public.facility_level AS ENUM (
     'phc',
     'chc',
-    'district_hospital'
+    'district_hospital',
+    'sub_centre'
 );
 
 
-ALTER TYPE public.facility_level OWNER TO subash;
-
 --
--- Name: referral_state; Type: TYPE; Schema: public; Owner: subash
+-- Name: referral_state; Type: TYPE; Schema: public; Owner: -
 --
 
 CREATE TYPE public.referral_state AS ENUM (
@@ -59,10 +58,8 @@ CREATE TYPE public.referral_state AS ENUM (
 );
 
 
-ALTER TYPE public.referral_state OWNER TO subash;
-
 --
--- Name: urgency_level; Type: TYPE; Schema: public; Owner: subash
+-- Name: urgency_level; Type: TYPE; Schema: public; Owner: -
 --
 
 CREATE TYPE public.urgency_level AS ENUM (
@@ -73,14 +70,12 @@ CREATE TYPE public.urgency_level AS ENUM (
 );
 
 
-ALTER TYPE public.urgency_level OWNER TO subash;
-
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
 
 --
--- Name: asha_workers; Type: TABLE; Schema: public; Owner: subash
+-- Name: asha_workers; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.asha_workers (
@@ -91,10 +86,8 @@ CREATE TABLE public.asha_workers (
 );
 
 
-ALTER TABLE public.asha_workers OWNER TO subash;
-
 --
--- Name: facilities; Type: TABLE; Schema: public; Owner: subash
+-- Name: facilities; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.facilities (
@@ -113,10 +106,8 @@ CREATE TABLE public.facilities (
 );
 
 
-ALTER TABLE public.facilities OWNER TO subash;
-
 --
--- Name: facility_staff; Type: TABLE; Schema: public; Owner: subash
+-- Name: facility_staff; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.facility_staff (
@@ -132,10 +123,8 @@ CREATE TABLE public.facility_staff (
 );
 
 
-ALTER TABLE public.facility_staff OWNER TO subash;
-
 --
--- Name: patients; Type: TABLE; Schema: public; Owner: subash
+-- Name: patients; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.patients (
@@ -151,10 +140,8 @@ CREATE TABLE public.patients (
 );
 
 
-ALTER TABLE public.patients OWNER TO subash;
-
 --
--- Name: referral_state_transitions; Type: TABLE; Schema: public; Owner: subash
+-- Name: referral_state_transitions; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.referral_state_transitions (
@@ -169,10 +156,8 @@ CREATE TABLE public.referral_state_transitions (
 );
 
 
-ALTER TABLE public.referral_state_transitions OWNER TO subash;
-
 --
--- Name: referrals; Type: TABLE; Schema: public; Owner: subash
+-- Name: referrals; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.referrals (
@@ -190,26 +175,38 @@ CREATE TABLE public.referrals (
 );
 
 
-ALTER TABLE public.referrals OWNER TO subash;
-
 --
--- Name: sos_alerts; Type: TABLE; Schema: public; Owner: subash
+-- Name: sos_alerts; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.sos_alerts (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    latitude double precision,
-    longitude double precision,
-    patient_context jsonb DEFAULT '{}'::jsonb,
-    status text DEFAULT 'active'::text NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    client_alert_id text NOT NULL,
+    reported_at timestamp with time zone,
+    received_at timestamp with time zone DEFAULT now() NOT NULL,
+    patient_name text,
+    patient_phone text,
+    patient_village text,
+    patient_age double precision,
+    patient_sex text,
+    symptoms jsonb,
+    lat double precision,
+    lng double precision,
+    accuracy double precision,
+    facility_id uuid,
+    channel text DEFAULT 'citizen_web'::text NOT NULL,
+    status text DEFAULT 'open'::text NOT NULL,
+    repeat_count integer DEFAULT 1 NOT NULL,
+    acknowledged_by_staff_id uuid,
+    acknowledged_at timestamp with time zone,
+    resolved_at timestamp with time zone,
+    resolution_notes text,
+    CONSTRAINT sos_alerts_status_check CHECK ((status = ANY (ARRAY['open'::text, 'acknowledged'::text, 'resolved'::text])))
 );
 
 
-ALTER TABLE public.sos_alerts OWNER TO subash;
-
 --
--- Name: triage_records; Type: TABLE; Schema: public; Owner: subash
+-- Name: triage_records; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.triage_records (
@@ -235,10 +232,8 @@ CREATE TABLE public.triage_records (
 );
 
 
-ALTER TABLE public.triage_records OWNER TO subash;
-
 --
--- Name: asha_workers asha_workers_pkey; Type: CONSTRAINT; Schema: public; Owner: subash
+-- Name: asha_workers asha_workers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.asha_workers
@@ -246,7 +241,7 @@ ALTER TABLE ONLY public.asha_workers
 
 
 --
--- Name: facilities facilities_pkey; Type: CONSTRAINT; Schema: public; Owner: subash
+-- Name: facilities facilities_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facilities
@@ -254,7 +249,7 @@ ALTER TABLE ONLY public.facilities
 
 
 --
--- Name: facility_staff facility_staff_phone_or_username_key; Type: CONSTRAINT; Schema: public; Owner: subash
+-- Name: facility_staff facility_staff_phone_or_username_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_staff
@@ -262,7 +257,7 @@ ALTER TABLE ONLY public.facility_staff
 
 
 --
--- Name: facility_staff facility_staff_pkey; Type: CONSTRAINT; Schema: public; Owner: subash
+-- Name: facility_staff facility_staff_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_staff
@@ -270,7 +265,7 @@ ALTER TABLE ONLY public.facility_staff
 
 
 --
--- Name: patients patients_pkey; Type: CONSTRAINT; Schema: public; Owner: subash
+-- Name: patients patients_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.patients
@@ -278,7 +273,7 @@ ALTER TABLE ONLY public.patients
 
 
 --
--- Name: referral_state_transitions referral_state_transitions_pkey; Type: CONSTRAINT; Schema: public; Owner: subash
+-- Name: referral_state_transitions referral_state_transitions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.referral_state_transitions
@@ -286,7 +281,7 @@ ALTER TABLE ONLY public.referral_state_transitions
 
 
 --
--- Name: referrals referrals_pkey; Type: CONSTRAINT; Schema: public; Owner: subash
+-- Name: referrals referrals_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.referrals
@@ -294,7 +289,15 @@ ALTER TABLE ONLY public.referrals
 
 
 --
--- Name: sos_alerts sos_alerts_pkey; Type: CONSTRAINT; Schema: public; Owner: subash
+-- Name: sos_alerts sos_alerts_client_alert_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sos_alerts
+    ADD CONSTRAINT sos_alerts_client_alert_id_key UNIQUE (client_alert_id);
+
+
+--
+-- Name: sos_alerts sos_alerts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.sos_alerts
@@ -302,7 +305,7 @@ ALTER TABLE ONLY public.sos_alerts
 
 
 --
--- Name: triage_records triage_records_pkey; Type: CONSTRAINT; Schema: public; Owner: subash
+-- Name: triage_records triage_records_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.triage_records
@@ -310,105 +313,119 @@ ALTER TABLE ONLY public.triage_records
 
 
 --
--- Name: idx_facilities_operational_status; Type: INDEX; Schema: public; Owner: subash
+-- Name: idx_facilities_operational_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_facilities_operational_status ON public.facilities USING btree (operational_status);
 
 
 --
--- Name: idx_facility_staff_facility; Type: INDEX; Schema: public; Owner: subash
+-- Name: idx_facility_staff_facility; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_facility_staff_facility ON public.facility_staff USING btree (facility_id);
 
 
 --
--- Name: idx_facility_staff_phone; Type: INDEX; Schema: public; Owner: subash
+-- Name: idx_facility_staff_phone; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_facility_staff_phone ON public.facility_staff USING btree (phone_or_username);
 
 
 --
--- Name: idx_patients_client_patient_id; Type: INDEX; Schema: public; Owner: subash
+-- Name: idx_patients_client_patient_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_patients_client_patient_id ON public.patients USING btree (client_patient_id) WHERE (client_patient_id IS NOT NULL);
 
 
 --
--- Name: idx_referral_state_transitions_staff; Type: INDEX; Schema: public; Owner: subash
+-- Name: idx_referral_state_transitions_staff; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_referral_state_transitions_staff ON public.referral_state_transitions USING btree (updated_by_staff_id);
 
 
 --
--- Name: idx_referrals_client_ref_id; Type: INDEX; Schema: public; Owner: subash
+-- Name: idx_referrals_client_ref_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_referrals_client_ref_id ON public.referrals USING btree (client_ref_id) WHERE (client_ref_id IS NOT NULL);
 
 
 --
--- Name: idx_referrals_created_by_role; Type: INDEX; Schema: public; Owner: subash
+-- Name: idx_referrals_created_by_role; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_referrals_created_by_role ON public.referrals USING btree (created_by_role);
 
 
 --
--- Name: idx_referrals_state; Type: INDEX; Schema: public; Owner: subash
+-- Name: idx_referrals_state; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_referrals_state ON public.referrals USING btree (state);
 
 
 --
--- Name: idx_referrals_triage_record; Type: INDEX; Schema: public; Owner: subash
+-- Name: idx_referrals_triage_record; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_referrals_triage_record ON public.referrals USING btree (triage_record_id);
 
 
 --
--- Name: idx_triage_patient; Type: INDEX; Schema: public; Owner: subash
+-- Name: idx_sos_alerts_facility_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_sos_alerts_facility_status ON public.sos_alerts USING btree (facility_id, status);
+
+
+--
+-- Name: idx_sos_alerts_received_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_sos_alerts_received_at ON public.sos_alerts USING btree (received_at DESC);
+
+
+--
+-- Name: idx_triage_patient; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_triage_patient ON public.triage_records USING btree (patient_id);
 
 
 --
--- Name: idx_triage_records_client_record_id; Type: INDEX; Schema: public; Owner: subash
+-- Name: idx_triage_records_client_record_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_triage_records_client_record_id ON public.triage_records USING btree (client_record_id) WHERE (client_record_id IS NOT NULL);
 
 
 --
--- Name: idx_triage_records_duration_days; Type: INDEX; Schema: public; Owner: subash
+-- Name: idx_triage_records_duration_days; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_triage_records_duration_days ON public.triage_records USING btree (duration_days);
 
 
 --
--- Name: idx_triage_records_urgency_mismatch; Type: INDEX; Schema: public; Owner: subash
+-- Name: idx_triage_records_urgency_mismatch; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_triage_records_urgency_mismatch ON public.triage_records USING btree (urgency_mismatch) WHERE (urgency_mismatch = true);
 
 
 --
--- Name: idx_triage_urgency_created; Type: INDEX; Schema: public; Owner: subash
+-- Name: idx_triage_urgency_created; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_triage_urgency_created ON public.triage_records USING btree (urgency, created_at);
 
 
 --
--- Name: asha_workers asha_workers_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: subash
+-- Name: asha_workers asha_workers_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.asha_workers
@@ -416,7 +433,7 @@ ALTER TABLE ONLY public.asha_workers
 
 
 --
--- Name: facilities facilities_updated_by_staff_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: subash
+-- Name: facilities facilities_updated_by_staff_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facilities
@@ -424,7 +441,7 @@ ALTER TABLE ONLY public.facilities
 
 
 --
--- Name: facility_staff facility_staff_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: subash
+-- Name: facility_staff facility_staff_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.facility_staff
@@ -432,7 +449,7 @@ ALTER TABLE ONLY public.facility_staff
 
 
 --
--- Name: referral_state_transitions referral_state_transitions_changed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: subash
+-- Name: referral_state_transitions referral_state_transitions_changed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.referral_state_transitions
@@ -440,7 +457,7 @@ ALTER TABLE ONLY public.referral_state_transitions
 
 
 --
--- Name: referral_state_transitions referral_state_transitions_referral_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: subash
+-- Name: referral_state_transitions referral_state_transitions_referral_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.referral_state_transitions
@@ -448,7 +465,7 @@ ALTER TABLE ONLY public.referral_state_transitions
 
 
 --
--- Name: referral_state_transitions referral_state_transitions_updated_by_staff_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: subash
+-- Name: referral_state_transitions referral_state_transitions_updated_by_staff_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.referral_state_transitions
@@ -456,7 +473,7 @@ ALTER TABLE ONLY public.referral_state_transitions
 
 
 --
--- Name: referrals referrals_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: subash
+-- Name: referrals referrals_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.referrals
@@ -464,7 +481,7 @@ ALTER TABLE ONLY public.referrals
 
 
 --
--- Name: referrals referrals_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: subash
+-- Name: referrals referrals_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.referrals
@@ -472,7 +489,7 @@ ALTER TABLE ONLY public.referrals
 
 
 --
--- Name: referrals referrals_origin_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: subash
+-- Name: referrals referrals_origin_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.referrals
@@ -480,7 +497,7 @@ ALTER TABLE ONLY public.referrals
 
 
 --
--- Name: referrals referrals_triage_record_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: subash
+-- Name: referrals referrals_triage_record_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.referrals
@@ -488,7 +505,23 @@ ALTER TABLE ONLY public.referrals
 
 
 --
--- Name: triage_records triage_records_patient_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: subash
+-- Name: sos_alerts sos_alerts_acknowledged_by_staff_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sos_alerts
+    ADD CONSTRAINT sos_alerts_acknowledged_by_staff_id_fkey FOREIGN KEY (acknowledged_by_staff_id) REFERENCES public.facility_staff(id) ON DELETE SET NULL;
+
+
+--
+-- Name: sos_alerts sos_alerts_facility_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sos_alerts
+    ADD CONSTRAINT sos_alerts_facility_id_fkey FOREIGN KEY (facility_id) REFERENCES public.facilities(id) ON DELETE SET NULL;
+
+
+--
+-- Name: triage_records triage_records_patient_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.triage_records
@@ -496,15 +529,8 @@ ALTER TABLE ONLY public.triage_records
 
 
 --
--- Name: SCHEMA public; Type: ACL; Schema: -; Owner: pg_database_owner
---
-
-GRANT ALL ON SCHEMA public TO subash;
-
-
---
 -- PostgreSQL database dump complete
 --
 
-\unrestrict rWCs7THR9uXVhx169O0PgykmhFKfje4LfybkH58phcg6NzStLMSnGrem409Uevy
+\unrestrict MEVms4eMB5xTHVhyYLLCyTLsHnRRFdnYcLvZepU2jM9SyjQ5bvd7eAsk83W5xbb
 

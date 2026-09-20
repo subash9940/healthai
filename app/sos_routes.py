@@ -1,13 +1,19 @@
-import os
-import uuid
+"""
+Emergency SOS routes — Public intake, Haversine routing, and Facility alert management.
+"""
+
 import json
-import time
 import logging
+import math
+import os
+import time
+import uuid
 from collections import deque
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Any
+
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
 
 from app.db import get_pool
 from app.services.auth import get_current_facility_staff, StaffSession
@@ -24,11 +30,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["sos"])
 
 # ---------------------------------------------------------------------------
-# Rate Limiting (D6)
+# Rate Limiting (D6 & F5)
 # ---------------------------------------------------------------------------
 # In-memory sliding window rate limiter: 30 requests per minute per client IP.
-# If TRUST_PROXY=1, parse the first IP in X-Forwarded-For; otherwise use request.client.host.
-# Fail open on any error. Never rate limit by phone number.
+# If TRUST_PROXY=1, parse the LAST IP in X-Forwarded-For; otherwise use request.client.host.
+# Fail open on any error. Never rate limit by phone number. Prunes stale IPs.
 
 RATE_LIMIT_WINDOW_SECONDS = 60.0
 RATE_LIMIT_MAX_REQUESTS = 30
@@ -40,8 +46,10 @@ def _get_client_ip(request: Request) -> str:
     if trust_proxy:
         xff = request.headers.get("X-Forwarded-For")
         if xff:
-            # Client IP is the first entry in comma-separated chain
-            return xff.split(",")[0].strip()
+            # When TRUST_PROXY=1, use the LAST X-Forwarded-For entry (F5)
+            parts = [p.strip() for p in xff.split(",") if p.strip()]
+            if parts:
+                return parts[-1]
     return request.client.host if request.client else "unknown"
 
 
@@ -50,19 +58,25 @@ def _check_rate_limit(client_ip: str) -> bool:
     Check and record sliding-window request timestamp.
     Returns True if allowed, False if rate limited.
     Fails open (returns True) on unexpected errors.
+    Prunes stale IP keys from dict.
     """
     try:
         now = time.time()
         window_start = now - RATE_LIMIT_WINDOW_SECONDS
 
+        # Prune old IP keys from dict (F5)
+        stale_ips = []
+        for ip, timestamps in list(_ip_request_timestamps.items()):
+            while timestamps and timestamps[0] < window_start:
+                timestamps.popleft()
+            if not timestamps:
+                stale_ips.append(ip)
+        for ip in stale_ips:
+            _ip_request_timestamps.pop(ip, None)
+
         if client_ip not in _ip_request_timestamps:
             _ip_request_timestamps[client_ip] = deque()
-
         timestamps = _ip_request_timestamps[client_ip]
-
-        # Purge timestamps outside the sliding window
-        while timestamps and timestamps[0] < window_start:
-            timestamps.popleft()
 
         if len(timestamps) >= RATE_LIMIT_MAX_REQUESTS:
             return False
@@ -70,52 +84,46 @@ def _check_rate_limit(client_ip: str) -> bool:
         timestamps.append(now)
         return True
     except Exception as e:
-        logger.warning(f"Rate limiter exception, failing open: {e}")
+        logger.warning(f"Rate limiter error: {e}. Failing open.")
         return True
 
 
 # ---------------------------------------------------------------------------
-# Geospatial Distance Helper (D4)
+# Haversine Distance SQL (D4)
 # ---------------------------------------------------------------------------
-# Haversine distance in SQL:
-# 6371 * 2 * ASIN(SQRT(
-#     POWER(SIN(RADIANS((lat - $1) / 2)), 2) +
-#     COS(RADIANS($1)) * COS(RADIANS(lat)) *
-#     POWER(SIN(RADIANS((lng - $2) / 2)), 2)
-# ))
-
-HAVERSINE_SQL = """
-6371.0 * 2.0 * ASIN(SQRT(
-    POWER(SIN(RADIANS((lat - $1) / 2.0)), 2) +
-    COS(RADIANS($1)) * COS(RADIANS(lat)) *
-    POWER(SIN(RADIANS((lng - $2) / 2.0)), 2)
-))
-"""
+# Distance in km on WGS84 sphere with mean radius 6371.0 km
+HAVERSINE_SQL = """(
+    6371.0 * 2.0 * ASIN(
+        SQRT(
+            POWER(SIN(RADIANS((lat - $1) / 2.0)), 2) +
+            COS(RADIANS($1)) * COS(RADIANS(lat)) *
+            POWER(SIN(RADIANS((lng - $2) / 2.0)), 2)
+        )
+    )
+)"""
 
 
 def _parse_reported_at(reported_at_str: Optional[str]) -> Optional[datetime]:
-    """
-    Parse client ISO timestamp string into aware datetime.
-    Gracefully fallback to None if malformed or in future (> 60s skew).
-    """
+    """Parse client reported_at ISO string safely. Ignore future dates > 60s ahead."""
     if not reported_at_str:
         return None
     try:
-        # Handle trailing Z or offset
         dt = datetime.fromisoformat(reported_at_str.replace("Z", "+00:00"))
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        now = datetime.now(timezone.utc)
-        if dt > now + timedelta(seconds=60):
-            # Future timestamp drift: reject client timestamp, fallback to None
+        # Check against future skew (>60s)
+        now_utc = datetime.now(timezone.utc)
+        if dt > now_utc + timedelta(seconds=60):
+            logger.warning(f"Client reported_at {dt} is in future relative to server {now_utc}. Using server received_at.")
             return None
         return dt
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to parse client reported_at '{reported_at_str}': {e}. Using server received_at.")
         return None
 
 
 # ---------------------------------------------------------------------------
-# Public SOS Ingestion (D3, D4, D5, D6)
+# Public SOS Intake (D3, D4, D5, F1, F2, F3)
 # ---------------------------------------------------------------------------
 
 @router.post("/sos", response_model=SosAlertResponse)
@@ -126,10 +134,10 @@ async def create_sos_alert(
 ):
     """
     Public emergency SOS intake endpoint.
-    - Zero auth required.
-    - Mandatory: client_alert_id.
-    - Gracefully handles missing/malformed coordinates, timestamps, or facility_ids.
-    - Idempotency on client_alert_id.
+    - No authentication required.
+    - Rate-limited to 30 req/min per IP.
+    - Wrapped in ONE transaction with advisory xact lock (F3).
+    - Idempotency on client_alert_id with INSERT ... ON CONFLICT DO NOTHING (F3).
     - Deduplication: collapses repeat requests from same phone within 2 minutes into existing open alert.
     - Nearest facility routing using tier priority (sub_centre/phc -> chc/district_hospital).
     """
@@ -140,20 +148,14 @@ async def create_sos_alert(
             detail="Rate limit exceeded. Too many SOS alerts from this IP. Please wait.",
         )
 
-    clean_client_alert_id = req.client_alert_id.strip() if req.client_alert_id else ""
-    if not clean_client_alert_id:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="client_alert_id is required.",
-        )
-
+    clean_client_alert_id = req.client_alert_id.strip()
     parsed_reported_at = _parse_reported_at(req.reported_at)
     now_utc = datetime.now(timezone.utc)
 
-    clean_phone = req.patient_phone.strip() if req.patient_phone else None
-    clean_name = req.patient_name.strip() if req.patient_name else None
-    clean_village = req.patient_village.strip() if req.patient_village else None
-    clean_sex = req.patient_sex.strip() if req.patient_sex else None
+    clean_phone = req.patient_phone
+    clean_name = req.patient_name
+    clean_village = req.patient_village
+    clean_sex = req.patient_sex
     symptoms_json = json.dumps(req.symptoms) if req.symptoms is not None else None
 
     # Validate facility_id if passed
@@ -165,216 +167,248 @@ async def create_sos_alert(
             explicit_facility_uuid = None
 
     async with pool.acquire() as conn:
-        # 1. Idempotency check: if client_alert_id already exists, return existing
-        existing_client_alert = await conn.fetchrow(
-            """
-            SELECT s.id, s.client_alert_id, s.status, s.received_at, s.repeat_count,
-                   s.facility_id, f.name AS facility_name, f.level AS facility_level, f.contact_phone AS facility_phone
-            FROM sos_alerts s
-            LEFT JOIN facilities f ON s.facility_id = f.id
-            WHERE s.client_alert_id = $1
-            """,
-            clean_client_alert_id,
-        )
-        if existing_client_alert:
-            fac_id = str(existing_client_alert["facility_id"]) if existing_client_alert["facility_id"] else None
-            return SosAlertResponse(
-                alert_id=str(existing_client_alert["id"]),
-                client_alert_id=existing_client_alert["client_alert_id"],
-                status=existing_client_alert["status"],
-                received_at=existing_client_alert["received_at"].isoformat(),
-                facility_id=fac_id,
-                facility_name=existing_client_alert["facility_name"],
-                facility_level=existing_client_alert["facility_level"],
-                facility_phone=existing_client_alert["facility_phone"],
-                distance_km=None,
-                repeat_count=existing_client_alert["repeat_count"],
-                unrouted=(fac_id is None),
-                message="SOS alert already recorded (idempotent submission).",
-            )
+        async with conn.transaction():
+            # Advisory transaction lock on phone (if present) or client_alert_id (F3)
+            lock_key = clean_phone if clean_phone else clean_client_alert_id
+            await conn.execute("SELECT pg_advisory_xact_lock(hashtext($1))", lock_key)
 
-        # 2. Deduplication check (D5): same patient_phone + open alert within 2 minutes
-        if clean_phone:
-            two_mins_ago = now_utc - timedelta(minutes=2)
-            open_dup_alert = await conn.fetchrow(
+            # 1. Idempotency check: if client_alert_id already exists, return existing
+            existing_client_alert = await conn.fetchrow(
                 """
                 SELECT s.id, s.client_alert_id, s.status, s.received_at, s.repeat_count,
                        s.facility_id, f.name AS facility_name, f.level AS facility_level, f.contact_phone AS facility_phone
                 FROM sos_alerts s
                 LEFT JOIN facilities f ON s.facility_id = f.id
-                WHERE s.patient_phone = $1
-                  AND s.status = 'open'
-                  AND s.received_at >= $2
-                ORDER BY s.received_at DESC
-                LIMIT 1
-                FOR UPDATE OF s
+                WHERE s.client_alert_id = $1
                 """,
-                clean_phone,
-                two_mins_ago,
+                clean_client_alert_id,
             )
-            if open_dup_alert:
-                # Collapse into existing open alert
-                new_repeat = open_dup_alert["repeat_count"] + 1
-                update_fields = ["repeat_count = $1"]
-                update_params: List[Any] = [new_repeat]
-                if req.lat is not None and req.lng is not None:
-                    update_params.extend([req.lat, req.lng, req.accuracy])
-                    update_fields.extend([
-                        f"lat = ${len(update_params)-2}",
-                        f"lng = ${len(update_params)-1}",
-                        f"accuracy = ${len(update_params)}",
-                    ])
-                update_params.append(open_dup_alert["id"])
-                update_query = f"""
-                    UPDATE sos_alerts
-                    SET {", ".join(update_fields)}
-                    WHERE id = ${len(update_params)}
-                """
-                await conn.execute(update_query, *update_params)
-
-                fac_id = str(open_dup_alert["facility_id"]) if open_dup_alert["facility_id"] else None
+            if existing_client_alert:
+                fac_id = str(existing_client_alert["facility_id"]) if existing_client_alert["facility_id"] else None
                 return SosAlertResponse(
-                    alert_id=str(open_dup_alert["id"]),
-                    client_alert_id=open_dup_alert["client_alert_id"],
-                    status=open_dup_alert["status"],
-                    received_at=open_dup_alert["received_at"].isoformat(),
+                    alert_id=str(existing_client_alert["id"]),
+                    client_alert_id=existing_client_alert["client_alert_id"],
+                    status=existing_client_alert["status"],
+                    received_at=existing_client_alert["received_at"].isoformat(),
                     facility_id=fac_id,
-                    facility_name=open_dup_alert["facility_name"],
-                    facility_level=open_dup_alert["facility_level"],
-                    facility_phone=open_dup_alert["facility_phone"],
+                    facility_name=existing_client_alert["facility_name"],
+                    facility_level=existing_client_alert["facility_level"],
+                    facility_phone=existing_client_alert["facility_phone"],
                     distance_km=None,
-                    repeat_count=new_repeat,
+                    repeat_count=existing_client_alert["repeat_count"],
                     unrouted=(fac_id is None),
-                    message="SOS alert updated with latest location (repeat collapsed).",
+                    message="SOS alert already recorded (idempotent submission).",
                 )
 
-        # 3. Determine facility routing
-        assigned_facility_id: Optional[uuid.UUID] = None
-        routed_facility_row = None
-        computed_distance_km: Optional[float] = None
-
-        if explicit_facility_uuid:
-            # Check if explicit facility exists
-            routed_facility_row = await conn.fetchrow(
-                "SELECT id, name, level, contact_phone, lat, lng FROM facilities WHERE id = $1",
-                explicit_facility_uuid,
-            )
-            if routed_facility_row:
-                assigned_facility_id = routed_facility_row["id"]
-                if (
-                    req.lat is not None and req.lng is not None and
-                    routed_facility_row["lat"] is not None and routed_facility_row["lng"] is not None
-                ):
-                    dist_row = await conn.fetchrow(
-                        f"SELECT {HAVERSINE_SQL} AS distance FROM facilities WHERE id = $3",
+            # 2. Deduplication check (D5): same patient_phone + open alert within 2 minutes
+            if clean_phone:
+                two_mins_ago = now_utc - timedelta(minutes=2)
+                open_dup_alert = await conn.fetchrow(
+                    """
+                    SELECT s.id, s.client_alert_id, s.status, s.received_at, s.repeat_count,
+                           s.facility_id, f.name AS facility_name, f.level AS facility_level, f.contact_phone AS facility_phone
+                    FROM sos_alerts s
+                    LEFT JOIN facilities f ON s.facility_id = f.id
+                    WHERE s.patient_phone = $1
+                      AND s.status = 'open'
+                      AND s.received_at >= $2
+                    ORDER BY s.received_at DESC
+                    LIMIT 1
+                    """,
+                    clean_phone,
+                    two_mins_ago,
+                )
+                if open_dup_alert:
+                    new_repeat_count = open_dup_alert["repeat_count"] + 1
+                    await conn.execute(
+                        """
+                        UPDATE sos_alerts
+                        SET repeat_count = $1,
+                            lat = COALESCE($2, lat),
+                            lng = COALESCE($3, lng),
+                            accuracy = COALESCE($4, accuracy)
+                        WHERE id = $5
+                        """,
+                        new_repeat_count,
                         req.lat,
                         req.lng,
-                        assigned_facility_id,
+                        req.accuracy,
+                        open_dup_alert["id"],
                     )
-                    if dist_row and dist_row["distance"] is not None:
-                        computed_distance_km = round(float(dist_row["distance"]), 2)
+                    fac_id = str(open_dup_alert["facility_id"]) if open_dup_alert["facility_id"] else None
+                    return SosAlertResponse(
+                        alert_id=str(open_dup_alert["id"]),
+                        client_alert_id=open_dup_alert["client_alert_id"],
+                        status=open_dup_alert["status"],
+                        received_at=open_dup_alert["received_at"].isoformat(),
+                        facility_id=fac_id,
+                        facility_name=open_dup_alert["facility_name"],
+                        facility_level=open_dup_alert["facility_level"],
+                        facility_phone=open_dup_alert["facility_phone"],
+                        distance_km=None,
+                        repeat_count=new_repeat_count,
+                        unrouted=(fac_id is None),
+                        message=f"Repeated SOS alert received and collapsed ({new_repeat_count} times).",
+                    )
 
-        # If not explicitly assigned or facility did not exist, compute nearest facility (D4)
-        if not assigned_facility_id and req.lat is not None and req.lng is not None:
-            # Primary tier: sub_centre, phc
-            nearest_primary = await conn.fetchrow(
-                f"""
-                SELECT id, name, level, contact_phone, {HAVERSINE_SQL} AS distance
-                FROM facilities
-                WHERE lat IS NOT NULL AND lng IS NOT NULL
-                  AND level IN ('sub_centre', 'phc')
-                ORDER BY distance ASC
-                LIMIT 1
-                """,
-                req.lat,
-                req.lng,
-            )
-            if nearest_primary:
-                routed_facility_row = nearest_primary
-                assigned_facility_id = nearest_primary["id"]
-                computed_distance_km = round(float(nearest_primary["distance"]), 2)
-            else:
-                # Fallback tier: chc, district_hospital
-                nearest_fallback = await conn.fetchrow(
+            # 3. Geospatial Nearest-Facility Routing (D4)
+            assigned_facility_id: Optional[uuid.UUID] = None
+            computed_distance_km: Optional[float] = None
+            routed_facility_row = None
+
+            # If explicit facility_id was requested and exists
+            if explicit_facility_uuid:
+                routed_facility_row = await conn.fetchrow(
+                    "SELECT id, name, level, contact_phone, lat, lng FROM facilities WHERE id = $1",
+                    explicit_facility_uuid,
+                )
+                if routed_facility_row:
+                    assigned_facility_id = routed_facility_row["id"]
+                    if (
+                        req.lat is not None and req.lng is not None and
+                        routed_facility_row["lat"] is not None and routed_facility_row["lng"] is not None
+                    ):
+                        dist_row = await conn.fetchrow(
+                            f"SELECT {HAVERSINE_SQL} AS distance FROM facilities WHERE id = $3",
+                            req.lat,
+                            req.lng,
+                            assigned_facility_id,
+                        )
+                        if dist_row and dist_row["distance"] is not None:
+                            computed_distance_km = round(float(dist_row["distance"]), 2)
+
+            # If not explicitly assigned or facility did not exist, compute nearest facility (D4)
+            if not assigned_facility_id and req.lat is not None and req.lng is not None:
+                # Primary tier: sub_centre, phc
+                nearest_primary = await conn.fetchrow(
                     f"""
                     SELECT id, name, level, contact_phone, {HAVERSINE_SQL} AS distance
                     FROM facilities
                     WHERE lat IS NOT NULL AND lng IS NOT NULL
-                      AND level IN ('chc', 'district_hospital')
+                      AND level IN ('sub_centre', 'phc')
                     ORDER BY distance ASC
                     LIMIT 1
                     """,
                     req.lat,
                     req.lng,
                 )
-                if nearest_fallback:
-                    routed_facility_row = nearest_fallback
-                    assigned_facility_id = nearest_fallback["id"]
-                    computed_distance_km = round(float(nearest_fallback["distance"]), 2)
+                if nearest_primary:
+                    routed_facility_row = nearest_primary
+                    assigned_facility_id = nearest_primary["id"]
+                    computed_distance_km = round(float(nearest_primary["distance"]), 2)
+                else:
+                    # Fallback tier: chc, district_hospital
+                    nearest_fallback = await conn.fetchrow(
+                        f"""
+                        SELECT id, name, level, contact_phone, {HAVERSINE_SQL} AS distance
+                        FROM facilities
+                        WHERE lat IS NOT NULL AND lng IS NOT NULL
+                          AND level IN ('chc', 'district_hospital')
+                        ORDER BY distance ASC
+                        LIMIT 1
+                        """,
+                        req.lat,
+                        req.lng,
+                    )
+                    if nearest_fallback:
+                        routed_facility_row = nearest_fallback
+                        assigned_facility_id = nearest_fallback["id"]
+                        computed_distance_km = round(float(nearest_fallback["distance"]), 2)
 
-        # 4. Insert new SOS alert
-        insert_row = await conn.fetchrow(
-            """
-            INSERT INTO sos_alerts (
-                client_alert_id,
-                reported_at,
-                received_at,
-                patient_name,
-                patient_phone,
-                patient_village,
-                patient_age,
-                patient_sex,
-                symptoms,
-                lat,
-                lng,
-                accuracy,
-                facility_id,
-                channel,
-                status,
-                repeat_count
+            # 4. Insert new SOS alert with ON CONFLICT DO NOTHING (F3)
+            insert_row = await conn.fetchrow(
+                """
+                INSERT INTO sos_alerts (
+                    client_alert_id,
+                    reported_at,
+                    received_at,
+                    patient_name,
+                    patient_phone,
+                    patient_village,
+                    patient_age,
+                    patient_sex,
+                    symptoms,
+                    lat,
+                    lng,
+                    accuracy,
+                    facility_id,
+                    channel,
+                    status,
+                    repeat_count
+                )
+                VALUES (
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, 'open', 1
+                )
+                ON CONFLICT (client_alert_id) DO NOTHING
+                RETURNING id, client_alert_id, status, received_at, repeat_count, facility_id
+                """,
+                clean_client_alert_id,
+                parsed_reported_at,
+                now_utc,
+                clean_name,
+                clean_phone,
+                clean_village,
+                req.patient_age,
+                clean_sex,
+                symptoms_json,
+                req.lat,
+                req.lng,
+                req.accuracy,
+                assigned_facility_id,
+                req.channel or "citizen_web",
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, 'open', 1)
-            RETURNING id, client_alert_id, status, received_at, repeat_count, facility_id
-            """,
-            clean_client_alert_id,
-            parsed_reported_at,
-            now_utc,
-            clean_name,
-            clean_phone,
-            clean_village,
-            req.patient_age,
-            clean_sex,
-            symptoms_json,
-            req.lat,
-            req.lng,
-            req.accuracy,
-            assigned_facility_id,
-            req.channel or "citizen_web",
-        )
 
-        fac_id_str = str(insert_row["facility_id"]) if insert_row["facility_id"] else None
-        fac_name = routed_facility_row["name"] if routed_facility_row else None
-        fac_level = str(routed_facility_row["level"]) if routed_facility_row else None
-        fac_phone = routed_facility_row["contact_phone"] if routed_facility_row else None
+            if not insert_row:
+                # Concurrent insertion occurred with same client_alert_id, fetch existing (F3)
+                existing = await conn.fetchrow(
+                    """
+                    SELECT s.id, s.client_alert_id, s.status, s.received_at, s.repeat_count,
+                           s.facility_id, f.name AS facility_name, f.level AS facility_level, f.contact_phone AS facility_phone
+                    FROM sos_alerts s
+                    LEFT JOIN facilities f ON s.facility_id = f.id
+                    WHERE s.client_alert_id = $1
+                    """,
+                    clean_client_alert_id,
+                )
+                fac_id = str(existing["facility_id"]) if existing["facility_id"] else None
+                return SosAlertResponse(
+                    alert_id=str(existing["id"]),
+                    client_alert_id=existing["client_alert_id"],
+                    status=existing["status"],
+                    received_at=existing["received_at"].isoformat(),
+                    facility_id=fac_id,
+                    facility_name=existing["facility_name"],
+                    facility_level=existing["facility_level"],
+                    facility_phone=existing["facility_phone"],
+                    distance_km=None,
+                    repeat_count=existing["repeat_count"],
+                    unrouted=(fac_id is None),
+                    message="SOS alert already recorded (idempotent submission).",
+                )
 
-        return SosAlertResponse(
-            alert_id=str(insert_row["id"]),
-            client_alert_id=insert_row["client_alert_id"],
-            status=insert_row["status"],
-            received_at=insert_row["received_at"].isoformat(),
-            facility_id=fac_id_str,
-            facility_name=fac_name,
-            facility_level=fac_level,
-            facility_phone=fac_phone,
-            distance_km=computed_distance_km,
-            repeat_count=insert_row["repeat_count"],
-            unrouted=(fac_id_str is None),
-            message="Emergency SOS alert successfully registered.",
-        )
+            fac_id_str = str(insert_row["facility_id"]) if insert_row["facility_id"] else None
+            fac_name = routed_facility_row["name"] if routed_facility_row else None
+            fac_level = str(routed_facility_row["level"]) if routed_facility_row else None
+            fac_phone = routed_facility_row["contact_phone"] if routed_facility_row else None
+
+            return SosAlertResponse(
+                alert_id=str(insert_row["id"]),
+                client_alert_id=insert_row["client_alert_id"],
+                status=insert_row["status"],
+                received_at=insert_row["received_at"].isoformat(),
+                facility_id=fac_id_str,
+                facility_name=fac_name,
+                facility_level=fac_level,
+                facility_phone=fac_phone,
+                distance_km=computed_distance_km,
+                repeat_count=insert_row["repeat_count"],
+                unrouted=(fac_id_str is None),
+                message="Emergency SOS alert successfully registered.",
+            )
 
 
 # ---------------------------------------------------------------------------
-# Facility Staff SOS Alert Management (D7)
+# Facility Staff SOS Alert Management (D7 & F6)
 # ---------------------------------------------------------------------------
 
 @router.get("/facility/sos", response_model=List[SosListItemResponse])
@@ -427,8 +461,8 @@ async def list_facility_sos_alerts(
     if status_filter:
         clean_status = status_filter.strip().lower()
         if clean_status in ("open", "acknowledged", "resolved"):
+            query += " AND s.status = $2"
             params.append(clean_status)
-            query += f" AND s.status = ${len(params)}"
 
     query += " ORDER BY s.received_at DESC"
 
@@ -496,7 +530,7 @@ async def acknowledge_sos_alert(
     - Transitions from 'open' -> 'acknowledged'.
     - Guarded atomic update: WHERE status = 'open' AND (facility_id = :staff_facility OR facility_id IS NULL)
     - If facility_id was NULL (unrouted), acknowledges AND binds facility_id = staff.facility_id.
-    - Returns 409 Conflict if alert not found or already acknowledged/resolved by another facility.
+    - Returns 409 Conflict if alert not found or already acknowledged/resolved (F6: does not expose other facility UUID).
     """
     try:
         alert_uuid = uuid.UUID(alert_id)
@@ -530,16 +564,16 @@ async def acknowledge_sos_alert(
         )
 
         if not updated_row:
-            # Check why it didn't update to return descriptive 409
             existing = await conn.fetchrow("SELECT id, status, facility_id FROM sos_alerts WHERE id = $1", alert_uuid)
             if not existing:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"SOS alert with ID {alert_id} not found.",
                 )
+            # F6: Do not include another facility's UUID in 409 detail
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cannot acknowledge SOS alert: current status is '{existing['status']}' and assigned to facility '{existing['facility_id']}'.",
+                detail=f"Cannot acknowledge SOS alert: alert is currently '{existing['status']}' or assigned to another facility.",
             )
 
         return SosActionResponse(
@@ -565,7 +599,7 @@ async def resolve_sos_alert(
     - Transitions from ('open', 'acknowledged') -> 'resolved'.
     - Guarded atomic update: WHERE status IN ('open', 'acknowledged') AND (facility_id = :staff_facility OR facility_id IS NULL)
     - If facility_id was NULL, binds facility_id = staff.facility_id.
-    - Returns 409 Conflict if alert is already resolved or belongs to another facility.
+    - Returns 409 Conflict if alert is already resolved or belongs to another facility (F6: does not expose other facility UUID).
     """
     try:
         alert_uuid = uuid.UUID(alert_id)
@@ -606,9 +640,10 @@ async def resolve_sos_alert(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"SOS alert with ID {alert_id} not found.",
                 )
+            # F6: Do not include another facility's UUID in 409 detail
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cannot resolve SOS alert: current status is '{existing['status']}' and assigned to facility '{existing['facility_id']}'.",
+                detail=f"Cannot resolve SOS alert: alert is currently '{existing['status']}' or assigned to another facility.",
             )
 
         return SosActionResponse(
