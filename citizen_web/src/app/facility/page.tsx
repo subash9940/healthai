@@ -499,6 +499,36 @@ export default function FacilityDashboard() {
     localStorage.removeItem('swasthya_facility_staff');
   };
 
+  // Action: Accept Referral (created -> in_transit)
+  const handleAcceptReferral = async (item: ReferralItem) => {
+    if (!token) return;
+    setActionLoading(item.id);
+    setActionMessage(null);
+
+    try {
+      const res = await fetch(`/api/facility/referrals/${item.id}/accept`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ notes: `Referral accepted by ${staff?.name || 'Staff'}` }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || data.error || 'Failed to accept referral');
+      }
+
+      setActionMessage({ text: `✓ Referral ${item.id.slice(0, 8)} accepted (In Transit)`, type: 'success' });
+      await fetchReferrals(token);
+    } catch (err: any) {
+      setActionMessage({ text: `Error: ${err?.message}`, type: 'error' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   // Action: Mark Received at Facility
   const handleMarkReceived = async (item: ReferralItem) => {
     if (!token) return;
@@ -2069,9 +2099,20 @@ export default function FacilityDashboard() {
                         )}
 
                         {item.state === 'created' && (
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                            Awaiting Transit
-                          </span>
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            disabled={actionLoading === item.id}
+                            style={{
+                              padding: '5px 10px',
+                              fontSize: '11px',
+                              minHeight: 'auto',
+                              background: 'var(--primary)',
+                            }}
+                            onClick={() => handleAcceptReferral(item)}
+                          >
+                            {actionLoading === item.id ? 'Updating...' : '📥 Accept Referral'}
+                          </button>
                         )}
 
                         {item.state === 'closed' && (
