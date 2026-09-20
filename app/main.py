@@ -1,26 +1,29 @@
 """
 Swasthya Setu API — main FastAPI application.
 
-Wired for DB persistence as of the /triage endpoint integration.
+Wired for DB persistence as of the /triage endpoint integration,
+and /health + /sync endpoints for ASHA mobile client synchronization.
 """
 
 from contextlib import asynccontextmanager
 import json
 import os
 import logging
+import secrets
 
 # Load .env BEFORE any module that reads os.environ (db.py does)
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Header, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import asyncpg
 
 from app.db import init_pool, close_pool, get_pool
-from app.persistence import save_triage
+from app.persistence import save_triage, process_sync_batch
 from app.schemas.triage import TriageRequest, TriageResponse
+from app.schemas.sync import SyncRequest, SyncResponse
 from app.services.rules_engine import evaluate
 from app.symptom_vocab import SYMPTOM_KEYS, SYMPTOM_KEY_SET
 from app.facility_routes import router as facility_router
@@ -50,6 +53,64 @@ app.add_middleware(
 app.include_router(facility_router)
 
 
+# ---------------------------------------------------------------------------
+# Health Probe (D9)
+# ---------------------------------------------------------------------------
+
+@app.get("/health")
+async def health(pool: asyncpg.Pool = Depends(get_pool)):
+    """
+    D9: Health check endpoint.
+    Runs 'SELECT 1' on database pool.
+    Returns 200 OK or 503 Service Unavailable.
+    Requires no authentication key.
+    """
+    try:
+        async with pool.acquire() as conn:
+            val = await conn.fetchval("SELECT 1")
+            if val == 1:
+                return {"status": "ok", "db": "connected"}
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database connection unavailable",
+        )
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Database check failed",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Sync Authentication Dependency (D7)
+# ---------------------------------------------------------------------------
+
+def verify_sync_key(x_sync_key: str | None = Header(default=None, alias="X-Sync-Key")):
+    """
+    D7: /sync requires header X-Sync-Key matching env SYNC_API_KEY.
+    - Unset env SYNC_API_KEY -> 503 Service Unavailable
+    - Missing or wrong key -> 401 Unauthorized
+    """
+    sync_api_key = os.getenv("SYNC_API_KEY")
+    if not sync_api_key:
+        logger.error("SYNC_API_KEY environment variable is not configured on server")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Sync service is temporarily misconfigured or unavailable",
+        )
+    if not x_sync_key or not secrets.compare_digest(x_sync_key, sync_api_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-Sync-Key authentication header",
+        )
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Triage Endpoint
+# ---------------------------------------------------------------------------
+
 @app.post("/triage", response_model=TriageResponse)
 async def triage(
     request: TriageRequest,
@@ -62,18 +123,45 @@ async def triage(
     2. Persistence layer writes to triage_records (+ patients, referrals).
     3. Return response with DB-assigned IDs attached for client reference.
     """
-    # 1. Deterministic rule engine — unchanged, still the source of truth
     response = evaluate(request)
-
-    # 2. Persist — this is the part that didn't exist before
     saved = await save_triage(pool, request, response)
-
-    # 3. Attach DB-assigned IDs so clients can reference these
-    # records later (referral status polling, FHIR bundle export, etc.)
     response.triage_record_id = str(saved["triage_record_id"])
     response.patient_id = str(saved["patient_id"])
     response.referral_id = str(saved["referral_id"]) if saved["referral_id"] else None
     return response
+
+
+# ---------------------------------------------------------------------------
+# Sync Endpoint (D1-D8)
+# ---------------------------------------------------------------------------
+
+@app.post("/sync", response_model=SyncResponse)
+async def sync_records(
+    request: SyncRequest,
+    _auth: bool = Depends(verify_sync_key),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Batch synchronization endpoint for ASHA mobile client outbox.
+    Processes each patient and referral in its own savepoint.
+    Returns per-record status (accepted / duplicate / rejected).
+    """
+    statuses, synced_count, overall_success = await process_sync_batch(
+        pool, request.patients, request.referrals
+    )
+
+    msg = (
+        f"Batch processed successfully: {synced_count} records synchronized."
+        if overall_success
+        else f"Batch processed with partial rejections: {synced_count} records synchronized."
+    )
+
+    return SyncResponse(
+        success=overall_success,
+        synced_count=synced_count,
+        records=statuses,
+        message=msg,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -95,12 +183,6 @@ async def extract_symptoms(request: ExtractSymptomsRequest):
     """
     NLP symptom extraction endpoint — maps natural language transcripts
     (free-text or voice) strictly to the fixed 102-symptom vocabulary.
-
-    LLM is used ONLY for language understanding (non-clinical task).
-    Clinical severity classification remains in the deterministic rule engine.
-
-    This endpoint calls a local LLM proxy (OmniRoute on localhost:20128) using
-    the Anthropic SDK with model "kiro/auto".
     """
     from anthropic import Anthropic
 
@@ -162,16 +244,13 @@ Now extract all symptoms and vitals from the user's input."""
             messages=[{"role": "user", "content": user_message}],
         )
 
-        # Find first text block (handle ThinkingBlock reasoning objects)
         text_content = next((b.text for b in message.content if hasattr(b, "text")), None)
         if not text_content:
             raise HTTPException(status_code=500, detail="LLM returned no text content")
 
-        # Parse JSON response
         try:
             parsed = json.loads(text_content)
         except json.JSONDecodeError:
-            # Try to extract JSON from markdown code blocks
             if "```json" in text_content:
                 json_str = text_content.split("```json")[1].split("```")[0].strip()
                 parsed = json.loads(json_str)
@@ -184,7 +263,6 @@ Now extract all symptoms and vitals from the user's input."""
                     detail=f"LLM returned unparseable JSON: {text_content[:200]}"
                 )
 
-        # Validate symptoms against SYMPTOM_KEY_SET
         extracted_symptoms = parsed.get("symptoms", [])
         valid_symptoms = [s for s in extracted_symptoms if s in SYMPTOM_KEY_SET]
 
