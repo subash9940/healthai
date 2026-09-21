@@ -32,20 +32,32 @@ export interface StaffSessionData {
 
 export interface SosAlert {
   id: string;
-  name: string;
-  phone: string;
+  name?: string;
+  phone?: string;
+  patient_name?: string;
+  patient_phone?: string;
   village?: string;
+  patient_village?: string;
   age?: number;
+  patient_age?: number;
   sex?: string;
+  patient_sex?: string;
   lat?: number | null;
   lng?: number | null;
   created_at?: string;
+  received_at?: string;
+  reported_at?: string | null;
   reported_earlier_at?: string | null;
   repeat_count?: number;
   facility_id?: string | null;
   facility_name?: string | null;
-  status: "OPEN" | "ACKNOWLEDGED" | "RESOLVED";
+  status: "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "open" | "acknowledged" | "resolved" | string;
   resolved_notes?: string | null;
+  resolution_notes?: string | null;
+  unrouted?: boolean;
+  acknowledged_at?: string | null;
+  acknowledged_by_staff_name?: string | null;
+  resolved_at?: string | null;
 }
 
 export interface FacilityReferral {

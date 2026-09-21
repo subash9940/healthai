@@ -32,6 +32,7 @@ import { SyncService } from "./src/services/syncService";
 import { evaluateOfflineTriage } from "./src/rules/offlineRulesEngine";
 import { StaffService, StaffSessionData } from "./src/services/staffService";
 import { StaffHomeScreen } from "./src/screens/StaffHomeScreen";
+import { StaffSosScreen } from "./src/screens/StaffSosScreen";
 
 type AppScreen =
   | "auth"
@@ -273,6 +274,13 @@ export default function App() {
             onOpenSos={() => setCurrentScreen("staffSos")}
             onOpenReferrals={() => setCurrentScreen("staffReferrals")}
             onLogout={handleStaffLogout}
+          />
+        )}
+
+        {currentScreen === "staffSos" && (
+          <StaffSosScreen
+            language={language}
+            onBack={() => setCurrentScreen("staffHome")}
           />
         )}
       </View>
