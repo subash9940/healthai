@@ -30,6 +30,8 @@ import { FacilityAvailabilityScreen } from "./src/screens/FacilityAvailabilitySc
 import { StorageService } from "./src/services/storageService";
 import { SyncService } from "./src/services/syncService";
 import { evaluateOfflineTriage } from "./src/rules/offlineRulesEngine";
+import { StaffService, StaffSessionData } from "./src/services/staffService";
+import { StaffHomeScreen } from "./src/screens/StaffHomeScreen";
 
 type AppScreen =
   | "auth"
@@ -40,12 +42,16 @@ type AppScreen =
   | "result"
   | "referrals"
   | "history"
+  | "staffHome"
+  | "staffSos"
+  | "staffReferrals"
   | "facilities";
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>("auth");
   const [language, setLanguage] = useState<Language>("en"); // English primary default
   const [session, setSession] = useState<AshaWorkerSession | null>(null);
+  const [staffSession, setStaffSession] = useState<StaffSessionData | null>(null);
   const [pendingSyncCount, setPendingSyncCount] = useState<number>(0);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
@@ -64,6 +70,11 @@ export default function App() {
       if (savedSession && savedSession.is_authenticated) {
         setSession(savedSession);
         setCurrentScreen("dashboard");
+      }
+      const savedStaffSession = await StaffService.getSession();
+      if (savedStaffSession && savedStaffSession.token) {
+        setStaffSession(savedStaffSession);
+        setCurrentScreen("staffHome");
       }
       refreshSyncCount();
     }
@@ -88,6 +99,17 @@ export default function App() {
 
   const handleLogout = async () => {
     setSession(null);
+    setCurrentScreen("auth");
+  };
+
+  const handleStaffLoginSuccess = (newStaffSession: StaffSessionData) => {
+    setStaffSession(newStaffSession);
+    setCurrentScreen("staffHome");
+  };
+
+  const handleStaffLogout = async () => {
+    await StaffService.clearSession();
+    setStaffSession(null);
     setCurrentScreen("auth");
   };
 
@@ -168,6 +190,7 @@ export default function App() {
           <AuthScreen
             language={language}
             onLoginSuccess={handleLoginSuccess}
+            onStaffLoginSuccess={handleStaffLoginSuccess}
           />
         )}
 
@@ -240,6 +263,16 @@ export default function App() {
           <FacilityAvailabilityScreen
             language={language}
             onBack={() => setCurrentScreen("dashboard")}
+          />
+        )}
+
+        {currentScreen === "staffHome" && staffSession && (
+          <StaffHomeScreen
+            language={language}
+            staffSession={staffSession}
+            onOpenSos={() => setCurrentScreen("staffSos")}
+            onOpenReferrals={() => setCurrentScreen("staffReferrals")}
+            onLogout={handleStaffLogout}
           />
         )}
       </View>

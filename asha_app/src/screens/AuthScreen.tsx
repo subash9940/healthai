@@ -36,19 +36,67 @@ import {
   AuthorizedWorker,
   LockoutState,
 } from "../services/authService";
+import {
+  StaffService,
+  StaffSessionData,
+  StaffApiError,
+} from "../services/staffService";
 
 interface AuthScreenProps {
   language: Language;
   onLanguageChange?: (lang: Language) => void;
   onLoginSuccess: (session: AshaWorkerSession) => void;
+  onStaffLoginSuccess?: (session: StaffSessionData) => void;
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({
   language,
   onLanguageChange,
   onLoginSuccess,
+  onStaffLoginSuccess,
 }) => {
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
+
+  // Portal Switcher: "asha" or "facility_staff"
+  const [portalMode, setPortalMode] = useState<"asha" | "facility_staff">("asha");
+
+  // Facility Staff Login State
+  const [staffIdentifier, setStaffIdentifier] = useState("9876543210");
+  const [staffMpin, setStaffMpin] = useState("1234");
+  const [showStaffMpin, setShowStaffMpin] = useState(false);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [staffErrorMessage, setStaffErrorMessage] = useState<string | null>(null);
+
+  const STAFF_DEMO_PRESETS = [
+    { label: "Dr. Sharma", role: "MO", phone_or_username: "9876543210", mpin: "1234" },
+    { label: "Sister Anita", role: "Staff", phone_or_username: "9876543211", mpin: "1234" },
+    { label: "Admin Patil", role: "Super", phone_or_username: "9876543212", mpin: "1234" },
+  ];
+
+  const handleStaffLogin = async () => {
+    if (!staffIdentifier.trim()) {
+      setStaffErrorMessage(t.staff_phone_required || "Please enter phone number or username");
+      return;
+    }
+    if (!staffMpin.trim() || staffMpin.length < 4) {
+      setStaffErrorMessage(t.staff_mpin_required || "Please enter 4-digit MPIN");
+      return;
+    }
+    setStaffLoading(true);
+    setStaffErrorMessage(null);
+    try {
+      const sessionData = await StaffService.login(staffIdentifier.trim(), staffMpin.trim());
+      if (onStaffLoginSuccess) {
+        onStaffLoginSuccess(sessionData);
+      }
+    } catch (err: any) {
+      setStaffErrorMessage(
+        err?.message || t.staff_login_failed || "Invalid credentials. Please check phone and MPIN."
+      );
+    } finally {
+      setStaffLoading(false);
+    }
+  };
 
   // Main Action: "login" or "register"
   const [authAction, setAuthAction] = useState<"login" | "register">("login");
@@ -374,7 +422,171 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             </View>
           )}
 
+          {/* Role Portal Switcher: ASHA Worker vs Facility Staff */}
+          <View style={styles.portalSwitchContainer}>
+            <TouchableOpacity
+              style={[
+                styles.portalSwitchTab,
+                portalMode === "asha" && styles.portalSwitchTabActive,
+              ]}
+              onPress={() => setPortalMode("asha")}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="people"
+                size={16}
+                color={portalMode === "asha" ? THEME.colors.primaryDark : THEME.colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.portalSwitchText,
+                  portalMode === "asha" && styles.portalSwitchTextActive,
+                ]}
+              >
+                {t.auth_tab_asha || "ASHA Worker"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.portalSwitchTab,
+                portalMode === "facility_staff" && styles.portalSwitchTabActive,
+              ]}
+              onPress={() => setPortalMode("facility_staff")}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="business"
+                size={16}
+                color={portalMode === "facility_staff" ? THEME.colors.primaryDark : THEME.colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.portalSwitchText,
+                  portalMode === "facility_staff" && styles.portalSwitchTextActive,
+                ]}
+              >
+                {t.auth_tab_facility_staff || "Facility Staff"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Facility Staff Login Card */}
+          {portalMode === "facility_staff" && (
+            <View style={styles.card}>
+              <View style={styles.headerBox}>
+                <View style={styles.badgeGov}>
+                  <Text style={styles.govText}>{t.auth_device_secure || "National Health Mission"}</Text>
+                </View>
+                <Text style={styles.title}>
+                  {t.staff_login_title || "Facility Staff Login"}
+                </Text>
+                <Text style={styles.subtitle}>{t.app_title || "Jeevanya Clinical Triage"}</Text>
+              </View>
+
+              {/* Quick Login Presets */}
+              <View style={styles.staffPresetsContainer}>
+                <Text style={styles.staffPresetsLabel}>
+                  {t.staff_quick_login || "Quick Login Presets (शॉर्टकट)"}
+                </Text>
+                <View style={styles.staffPresetButtons}>
+                  {STAFF_DEMO_PRESETS.map((preset) => (
+                    <TouchableOpacity
+                      key={preset.phone_or_username}
+                      style={styles.staffPresetChip}
+                      onPress={() => {
+                        setStaffIdentifier(preset.phone_or_username);
+                        setStaffMpin(preset.mpin);
+                        setStaffErrorMessage(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.staffPresetChipRole}>{preset.role}</Text>
+                      <Text style={styles.staffPresetChipName}>{preset.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Inline Error Banner (Strict Zero Native Alert Policy) */}
+              {staffErrorMessage && (
+                <View style={styles.staffErrorBanner}>
+                  <Ionicons name="alert-circle" size={18} color={THEME.colors.emergencyText} />
+                  <Text style={styles.staffErrorText}>{staffErrorMessage}</Text>
+                </View>
+              )}
+
+              {/* Staff Login Form */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>
+                  {t.staff_phone_label || "Username or Phone Number"}
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. 9876543210 or anm_mandavgan"
+                  placeholderTextColor={THEME.colors.textMuted}
+                  value={staffIdentifier}
+                  onChangeText={(val) => {
+                    setStaffIdentifier(val);
+                    if (staffErrorMessage) setStaffErrorMessage(null);
+                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!staffLoading}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>
+                  {t.staff_mpin_label || "4-Digit MPIN"}
+                </Text>
+                <View style={styles.staffPasswordContainer}>
+                  <TextInput
+                    style={[styles.input, styles.staffPasswordInput]}
+                    placeholder="••••"
+                    placeholderTextColor={THEME.colors.textMuted}
+                    value={staffMpin}
+                    onChangeText={(val) => {
+                      setStaffMpin(val.replace(/\D/g, "").slice(0, 4));
+                      if (staffErrorMessage) setStaffErrorMessage(null);
+                    }}
+                    keyboardType="numeric"
+                    maxLength={4}
+                    secureTextEntry={!showStaffMpin}
+                    editable={!staffLoading}
+                  />
+                  <TouchableOpacity
+                    style={styles.staffEyeBtn}
+                    onPress={() => setShowStaffMpin(!showStaffMpin)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={showStaffMpin ? "eye-off" : "eye"}
+                      size={20}
+                      color={THEME.colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchButton
+                title={t.staff_login_btn || "Sign In to Facility Portal"}
+                onPress={handleStaffLogin}
+                loading={staffLoading}
+                disabled={staffLoading}
+                style={styles.loginBtn}
+              />
+
+              {/* Security Indicator Footer */}
+              <View style={styles.securityFooter}>
+                <Text style={styles.securityFooterText}>
+                  {"Encrypted Staff Session · Role-Based Access Control"}
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* Main Authentication Card */}
+          {portalMode === "asha" && (
           <View style={styles.card}>
             {/* Header / Brand */}
             <View style={styles.headerBox}>
@@ -825,6 +1037,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               </Text>
             </View>
           </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -1232,5 +1445,116 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: THEME.colors.textMuted,
     textAlign: "center",
+  },
+  portalSwitchContainer: {
+    flexDirection: "row",
+    backgroundColor: THEME.colors.surfaceSubtle,
+    borderRadius: THEME.borderRadius.md,
+    padding: 4,
+    marginBottom: THEME.spacing.md,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    gap: 4,
+  },
+  portalSwitchTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: THEME.borderRadius.sm,
+    gap: 6,
+  },
+  portalSwitchTabActive: {
+    backgroundColor: THEME.colors.surface,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  portalSwitchText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: THEME.colors.textMuted,
+  },
+  portalSwitchTextActive: {
+    color: THEME.colors.primaryDark,
+  },
+  staffPresetsContainer: {
+    marginBottom: THEME.spacing.md,
+    backgroundColor: THEME.colors.surfaceSubtle,
+    borderRadius: THEME.borderRadius.md,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  staffPresetsLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: THEME.colors.textSecondary,
+    marginBottom: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  staffPresetButtons: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  staffPresetChip: {
+    flex: 1,
+    backgroundColor: THEME.colors.surface,
+    borderWidth: 1,
+    borderColor: THEME.colors.borderStrong,
+    borderRadius: THEME.borderRadius.sm,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    alignItems: "center",
+  },
+  staffPresetChipRole: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: THEME.colors.accentBlue,
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  staffPresetChipName: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: THEME.colors.textPrimary,
+    textAlign: "center",
+  },
+  staffErrorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: THEME.colors.emergencyBg,
+    borderColor: THEME.colors.emergencyBorder,
+    borderWidth: 1,
+    borderRadius: THEME.borderRadius.md,
+    padding: 10,
+    marginBottom: THEME.spacing.md,
+  },
+  staffErrorText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: THEME.colors.emergencyText,
+    flex: 1,
+  },
+  staffPasswordContainer: {
+    position: "relative",
+    justifyContent: "center",
+  },
+  staffPasswordInput: {
+    letterSpacing: 8,
+    textAlign: "center",
+    fontSize: 20,
+    fontWeight: "800",
+    paddingRight: 44,
+  },
+  staffEyeBtn: {
+    position: "absolute",
+    right: 12,
+    padding: 6,
   },
 });
