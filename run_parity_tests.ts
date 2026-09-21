@@ -278,6 +278,66 @@ const testCases: TestCaseDef[] = [
     label: "Snake or scorpion bite",
     input: { symptoms: ["snake_or_scorpion_bite"], patient_age_years: 27, patient_sex: "male" }
   },
+  {
+    id: 51,
+    label: "Fail-closed LOW: adult [headache]",
+    input: { symptoms: ["headache"], patient_age_years: 30, patient_sex: "male" }
+  },
+  {
+    id: 52,
+    label: "Fail-closed LOW: adult [dizziness]",
+    input: { symptoms: ["dizziness"], patient_age_years: 30, patient_sex: "female" }
+  },
+  {
+    id: 53,
+    label: "Fail-closed LOW: adult [cough, headache]",
+    input: { symptoms: ["cough", "headache"], patient_age_years: 30, patient_sex: "male" }
+  },
+  {
+    id: 54,
+    label: "Fail-closed LOW: adult [fatigue]",
+    input: { symptoms: ["fatigue"], patient_age_years: 30, patient_sex: "female" }
+  },
+  {
+    id: 55,
+    label: "Fail-closed NOT LOW: adult [cough, weight_loss]",
+    input: { symptoms: ["cough", "weight_loss"], patient_age_years: 30, patient_sex: "male" }
+  },
+  {
+    id: 56,
+    label: "Fail-closed NOT LOW: adult [dizziness_vertigo, fatigue]",
+    input: { symptoms: ["dizziness_vertigo", "fatigue"], patient_age_years: 30, patient_sex: "female" }
+  },
+  {
+    id: 57,
+    label: "Fail-closed NOT LOW: adult [significant_weight_loss, cough]",
+    input: { symptoms: ["significant_weight_loss", "cough"], patient_age_years: 30, patient_sex: "male" }
+  },
+  {
+    id: 58,
+    label: "Fail-closed NOT LOW: adult [cough, convulsions_or_loss_of_consciousness]",
+    input: { symptoms: ["cough", "convulsions_or_loss_of_consciousness"], patient_age_years: 30, patient_sex: "female" }
+  },
+  {
+    id: 59,
+    label: "Fail-closed NOT LOW: adult [vomits_everything, cough]",
+    input: { symptoms: ["vomits_everything", "cough"], patient_age_years: 30, patient_sex: "male" }
+  },
+  {
+    id: 60,
+    label: "Fail-closed NOT LOW: adult [burn_present, cough]",
+    input: { symptoms: ["burn_present", "cough"], patient_age_years: 30, patient_sex: "female" }
+  },
+  {
+    id: 61,
+    label: "Fail-closed NOT LOW: adult [difficult_breathing, cough]",
+    input: { symptoms: ["difficult_breathing", "cough"], patient_age_years: 30, patient_sex: "male" }
+  },
+  {
+    id: 62,
+    label: "Fail-closed NOT LOW: adult [headache, burn_present]",
+    input: { symptoms: ["headache", "burn_present"], patient_age_years: 30, patient_sex: "female" }
+  },
 ];
 
 interface CaseResult {

@@ -97,6 +97,45 @@ export const ADULT_GREEN_SYMPTOMS = [
   "body_pain_weakness",
 ];
 
+// Explained symptom sets for LOW tier rules (fail-closed discipline)
+export const R_LOW_001_EXPLAINED = new Set([
+  "cough",
+  "mild_cough",
+  "cold_runny_nose",
+  "sore_throat",
+  "low_risk_cough_or_cold",
+]);
+
+export const R_LOW_002_EXPLAINED = new Set([
+  "fever",
+  "malaria_test_negative",
+  "fever_under_101f",
+]);
+
+export const R_LOW_003_EXPLAINED = new Set([
+  "ear_problem_reported",
+]);
+
+export const R_ADULT_LOW_001_EXPLAINED = new Set([
+  "minor_symptoms_of_existing_illness",
+  "low_risk_cough_or_cold",
+  "simple_skin_rash",
+  "fresh_scratches_or_wounds",
+  "fever_under_101f",
+  "cough",
+  "headache",
+  "dizziness",
+  "fatigue",
+  "body_pain_weakness",
+  "mild_cough",
+  "cold_runny_nose",
+  "sore_throat",
+  "skin_rash",
+  "rash",
+  "fever",
+  "headache_or_dizziness",
+]);
+
 function getAgeYears(r: TriageEvaluationRequest): number {
   const val = r.patient_age_years ?? (r as any).patient_age ?? (r as any).age_years ?? (r as any).age;
   return typeof val === "number" && !isNaN(val) ? val : 25;
@@ -1347,7 +1386,8 @@ export function evaluateOfflineTriage(
     !s.has("chest_indrawing") &&
     !GENERAL_DANGER_SIGNS.some((sig) => s.has(sig)) &&
     !hasFastBreathing(request) &&
-    !s.has("fever")
+    !s.has("fever") &&
+    Array.from(s).every((sig) => R_LOW_001_EXPLAINED.has(sig))
   ) {
     const action = "No general danger sign, no fast breathing or chest indrawing present. Mild symptoms — home care advice (soothe throat, keep warm, clear blocked nose), follow up if persists beyond 3 days or breathing worsens.";
     return {
@@ -1367,7 +1407,8 @@ export function evaluateOfflineTriage(
     s.has("fever") &&
     s.has("malaria_test_negative") &&
     !GENERAL_DANGER_SIGNS.some((sig) => s.has(sig)) &&
-    !s.has("stiff_neck")
+    !s.has("stiff_neck") &&
+    Array.from(s).every((sig) => R_LOW_002_EXPLAINED.has(sig))
   ) {
     const action = "Fever, malaria unlikely per IMNCI. Treat visible cause of fever if any. Advise return if fever persists beyond 7 days or danger signs develop.";
     return {
@@ -1388,7 +1429,8 @@ export function evaluateOfflineTriage(
     !s.has("ear_pain") &&
     !s.has("tender_swelling_behind_ear") &&
     !s.has("pus_draining_less_than_14_days") &&
-    !s.has("pus_draining_14_days_or_more")
+    !s.has("pus_draining_14_days_or_more") &&
+    Array.from(s).every((sig) => R_LOW_003_EXPLAINED.has(sig))
   ) {
     const action = "No ear infection per IMNCI. No treatment needed for ear.";
     return {
@@ -1411,7 +1453,8 @@ export function evaluateOfflineTriage(
     !ADULT_RED_TRAUMA_SYMPTOMS.some((sig) => s.has(sig)) &&
     !ADULT_YELLOW_MEDICAL_SYMPTOMS.some((sig) => s.has(sig)) &&
     !ADULT_YELLOW_TRAUMA_SYMPTOMS.some((sig) => s.has(sig)) &&
-    (hasLowFeverUnder101f(request) || ADULT_GREEN_SYMPTOMS.some((sig) => s.has(sig)))
+    (hasLowFeverUnder101f(request) || ADULT_GREEN_SYMPTOMS.some((sig) => s.has(sig))) &&
+    Array.from(s).every((sig) => R_ADULT_LOW_001_EXPLAINED.has(sig))
   ) {
     const action = "GREEN per Annexure 4 — manage appropriately, no observation or investigation needed. Advise follow-up in OPD if symptoms persist.";
     return {

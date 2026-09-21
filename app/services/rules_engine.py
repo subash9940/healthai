@@ -343,6 +343,46 @@ ADULT_GREEN_SYMPTOMS = [
 ]
 
 
+# Explained symptom sets for LOW tier rules (fail-closed discipline)
+R_LOW_001_EXPLAINED = {
+    "cough",
+    "mild_cough",
+    "cold_runny_nose",
+    "sore_throat",
+    "low_risk_cough_or_cold",
+}
+
+R_LOW_002_EXPLAINED = {
+    "fever",
+    "malaria_test_negative",
+    "fever_under_101f",
+}
+
+R_LOW_003_EXPLAINED = {
+    "ear_problem_reported",
+}
+
+R_ADULT_LOW_001_EXPLAINED = {
+    "minor_symptoms_of_existing_illness",
+    "low_risk_cough_or_cold",
+    "simple_skin_rash",
+    "fresh_scratches_or_wounds",
+    "fever_under_101f",
+    "cough",
+    "headache",
+    "dizziness",
+    "fatigue",
+    "body_pain_weakness",
+    "mild_cough",
+    "cold_runny_nose",
+    "sore_throat",
+    "skin_rash",
+    "rash",
+    "fever",
+    "headache_or_dizziness",
+}
+
+
 def has_low_fever_under_101f(r: TriageRequest) -> bool:
     """101F = 38.3C. Computed directly from vitals when available (same
     pattern as R-EMG-014's >38C check), falling back to the symptom key
@@ -1060,6 +1100,7 @@ RULES = [
             and not any(s in r.symptoms for s in GENERAL_DANGER_SIGNS)
             and not has_fast_breathing(r)
             and "fever" not in r.symptoms
+            and set(r.symptoms).issubset(R_LOW_001_EXPLAINED)
         ),
         "urgency": Urgency.LOW,
         "action": "No general danger sign, no fast breathing or chest indrawing present. Mild symptoms — home care advice (soothe throat, keep warm, clear blocked nose), follow up if persists beyond 3 days or breathing worsens.",
@@ -1072,6 +1113,7 @@ RULES = [
             "fever" in r.symptoms
             and "malaria_test_negative" in r.symptoms
             and not any(s in r.symptoms for s in GENERAL_DANGER_SIGNS + ["stiff_neck"])
+            and set(r.symptoms).issubset(R_LOW_002_EXPLAINED)
         ),
         "urgency": Urgency.LOW,
         "action": "Fever, malaria unlikely per IMNCI. Treat visible cause of fever if any. Advise return if fever persists beyond 7 days or danger signs develop.",
@@ -1086,6 +1128,7 @@ RULES = [
             and "tender_swelling_behind_ear" not in r.symptoms
             and "pus_draining_less_than_14_days" not in r.symptoms
             and "pus_draining_14_days_or_more" not in r.symptoms
+            and set(r.symptoms).issubset(R_LOW_003_EXPLAINED)
         ),
         "urgency": Urgency.LOW,
         "action": "No ear infection per IMNCI. No treatment needed for ear.",
@@ -1109,6 +1152,7 @@ RULES = [
                 has_low_fever_under_101f(r)
                 or any(s in r.symptoms for s in ADULT_GREEN_SYMPTOMS)
             )
+            and set(r.symptoms).issubset(R_ADULT_LOW_001_EXPLAINED)
         ),
         "urgency": Urgency.LOW,
         "action": "GREEN per Annexure 4 — manage appropriately, no observation or investigation needed. Advise follow-up in OPD if symptoms persist.",
