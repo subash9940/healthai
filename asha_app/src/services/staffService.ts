@@ -62,17 +62,34 @@ export interface SosAlert {
 
 export interface FacilityReferral {
   id: string;
-  patient_id?: string;
-  patient_name: string;
+  triage_record_id?: string;
+  facility_id?: string | null;
+  facility_name?: string | null;
+  facility_level?: string | null;
+  created_by_role?: string | null;
+  state?: "created" | "in_transit" | "received_at_facility" | "closed" | string;
+  status?: string;
+  created_at: string;
+  updated_at?: string;
+  patient_id?: string | null;
+  patient_name?: string | null;
+  patient_phone?: string | null;
+  patient_age_years?: number | null;
   age_years?: number;
+  patient_sex?: string | null;
   gender?: string;
-  symptoms?: string[];
+  patient_village?: string | null;
   urgency: string;
-  status: "created" | "in_transit" | "received" | "closed";
+  rule_name?: string;
+  symptoms?: string[];
+  vitals?: Record<string, any> | null;
+  recommended_action?: string | null;
+  citizen_message?: string | null;
+  requires_referral?: boolean;
+  referral_target_level?: string | null;
   from_facility_id?: string;
   to_facility_id?: string;
   referral_reason?: string;
-  created_at: string;
 }
 
 export class StaffApiError extends Error {
@@ -246,21 +263,24 @@ export const StaffService = {
     return this.request<FacilityReferral[]>("/facility/referrals/unassigned");
   },
 
-  async acceptReferral(id: string): Promise<{ status: string; referral: FacilityReferral }> {
-    return this.request<{ status: string; referral: FacilityReferral }>(`/facility/referrals/${id}/accept`, {
+  async acceptReferral(id: string, notes?: string): Promise<{ status: string; referral?: FacilityReferral }> {
+    return this.request<{ status: string; referral?: FacilityReferral }>(`/facility/referrals/${id}/accept`, {
       method: "POST",
+      body: notes ? { notes } : {},
     });
   },
 
-  async receiveReferral(id: string): Promise<{ status: string; referral: FacilityReferral }> {
-    return this.request<{ status: string; referral: FacilityReferral }>(`/facility/referrals/${id}/receive`, {
+  async receiveReferral(id: string, notes?: string): Promise<{ status: string; referral?: FacilityReferral }> {
+    return this.request<{ status: string; referral?: FacilityReferral }>(`/facility/referrals/${id}/receive`, {
       method: "POST",
+      body: notes ? { notes } : {},
     });
   },
 
-  async closeReferral(id: string): Promise<{ status: string; referral: FacilityReferral }> {
-    return this.request<{ status: string; referral: FacilityReferral }>(`/facility/referrals/${id}/close`, {
+  async closeReferral(id: string, notes?: string): Promise<{ status: string; referral?: FacilityReferral }> {
+    return this.request<{ status: string; referral?: FacilityReferral }>(`/facility/referrals/${id}/close`, {
       method: "POST",
+      body: notes ? { notes } : {},
     });
   },
 };

@@ -33,6 +33,7 @@ import { evaluateOfflineTriage } from "./src/rules/offlineRulesEngine";
 import { StaffService, StaffSessionData } from "./src/services/staffService";
 import { StaffHomeScreen } from "./src/screens/StaffHomeScreen";
 import { StaffSosScreen } from "./src/screens/StaffSosScreen";
+import { StaffReferralsScreen } from "./src/screens/StaffReferralsScreen";
 
 type AppScreen =
   | "auth"
@@ -279,6 +280,13 @@ export default function App() {
 
         {currentScreen === "staffSos" && (
           <StaffSosScreen
+            language={language}
+            onBack={() => setCurrentScreen("staffHome")}
+          />
+        )}
+
+        {currentScreen === "staffReferrals" && (
+          <StaffReferralsScreen
             language={language}
             onBack={() => setCurrentScreen("staffHome")}
           />
