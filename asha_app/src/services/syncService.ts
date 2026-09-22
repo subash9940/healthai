@@ -6,9 +6,10 @@
  * Gracefully handles offline / airplane mode with zero crash rate.
  */
 
+import { getBackendUrl } from "../config/backendUrl";
 import { StorageService } from "./storageService";
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? "http://10.0.2.2:8001";
+const BACKEND_URL = getBackendUrl();
 const SYNC_KEY = process.env.EXPO_PUBLIC_SYNC_KEY ?? "";
 
 export interface SyncResult {
