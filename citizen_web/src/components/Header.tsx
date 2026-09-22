@@ -86,14 +86,6 @@ export default function Header() {
 
           {/* Navigation Links + Language Selector */}
           <nav className={`header-nav ${mobileMenuOpen ? 'open' : ''}`} aria-label="Site Links">
-            <Link
-              href="/facility"
-              className="nav-link"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              {t('facility.queue_link') !== 'facility.queue_link' ? t('facility.queue_link') : 'Facility Queue'}
-            </Link>
-
             <div className="lang-selector" role="group" aria-label="Select Language">
               {languages.map((l) => (
                 <button
