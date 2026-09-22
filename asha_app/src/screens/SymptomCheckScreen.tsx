@@ -57,6 +57,12 @@ export const SymptomCheckScreen: React.FC<SymptomCheckScreenProps> = ({
     ) {
       return false;
     }
+    if (sym.maxAgeYears !== undefined && demographics.patient_age_years > sym.maxAgeYears) {
+      return false;
+    }
+    if (sym.minAgeYears !== undefined && demographics.patient_age_years < sym.minAgeYears) {
+      return false;
+    }
     return true;
   });
 
