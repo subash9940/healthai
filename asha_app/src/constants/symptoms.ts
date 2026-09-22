@@ -15,6 +15,7 @@ export interface SymptomItem {
   description: Record<Language, string>;
   applicableSex?: "female" | "all";
   onlyPregnantOrPostpartum?: boolean;
+  maxAgeYears?: number;
 }
 
 export const ASHA_SYMPTOMS: SymptomItem[] = [
@@ -110,6 +111,7 @@ export const ASHA_SYMPTOMS: SymptomItem[] = [
     id: "chest_indrawing",
     isDangerSign: true,
     category: "respiratory",
+    maxAgeYears: 5,
     labels: {
       mr: "श्वास घेताना छाती आत ओढली जाणे",
       hi: "सांस लेते समय छाती अंदर धंसना",
