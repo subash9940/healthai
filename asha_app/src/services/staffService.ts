@@ -9,11 +9,19 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
 export const STAFF_SESSION_KEY = "jeevanya_staff_session";
 
-const BACKEND_URL =
-  process.env.EXPO_PUBLIC_BACKEND_URL || "http://10.0.2.2:8001";
+const getDefaultBackendUrl = (): string => {
+  if (process.env.EXPO_PUBLIC_BACKEND_URL) {
+    return process.env.EXPO_PUBLIC_BACKEND_URL;
+  }
+  // Android emulator loopback bridge is 10.0.2.2; Web, iOS, and local environments use localhost
+  return Platform.OS === "android" ? "http://10.0.2.2:8001" : "http://localhost:8001";
+};
+
+const BACKEND_URL = getDefaultBackendUrl();
 
 export interface FacilityStaff {
   id: string;
