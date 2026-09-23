@@ -304,7 +304,7 @@ export const TriageResultScreen: React.FC<TriageResultScreenProps> = ({
                   >
                     <View style={styles.facilityHeaderRow}>
                       <Text style={styles.facilityName}>{fac.name}</Text>
-                      <View style={styles.badgeRow}>
+                      <View style={styles.facilityBadgeRow}>
                         {isRecommended && (
                           <View style={styles.recommendedBadge}>
                             <Text style={styles.recommendedBadgeText}>
@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 6,
   },
-  badgeRow: {
+  facilityBadgeRow: {
     flexDirection: "row",
     gap: 4,
   },

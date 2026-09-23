@@ -10,12 +10,13 @@ import { Language } from "../types";
 export interface SymptomItem {
   id: string;
   isDangerSign: boolean;
-  category: "danger" | "respiratory" | "fever" | "digestive" | "maternal" | "adult_emergency" | "ear";
+  category: "danger" | "respiratory" | "fever" | "digestive" | "maternal" | "adult_emergency" | "ear" | "trauma";
   labels: Record<Language, string>;
   description: Record<Language, string>;
   applicableSex?: "female" | "all";
   onlyPregnantOrPostpartum?: boolean;
   maxAgeYears?: number;
+  minAgeYears?: number;
 }
 
 export const ASHA_SYMPTOMS: SymptomItem[] = [
@@ -88,6 +89,57 @@ export const ASHA_SYMPTOMS: SymptomItem[] = [
       ta: "அசைவு அல்லது சுயநினைவற்ற நிலை",
     },
   },
+  {
+    id: "altered_sensorium",
+    isDangerSign: true,
+    category: "danger",
+    labels: {
+      mr: "गोंधळलेली अवस्था, अतिसुस्ती किंवा ओळखता न येणे",
+      hi: "भ्रम, अत्यधिक सुस्ती, पहचान न पाना या मानसिक स्थिति में बदलाव",
+      en: "Confusion, drowsiness, disorientation, or altered mental state",
+      ta: "குழப்பம், மயக்க நிலை, சுயநினைவின்மை அல்லது மனநிலையில் திடீர் மாற்றம்",
+    },
+    description: {
+      mr: "मेंदू किंवा चयापचयातील गंभीर बिघाड, तात्काळ संदर्भ आवश्यक",
+      hi: "मानसिक स्थिति में गंभीर बदलाव, तत्काल अस्पताल रेफरल आवश्यक",
+      en: "Severe neurological compromise or metabolic crisis",
+      ta: "தீவிர நரம்பியல் பிரச்சனை அல்லது மருத்துவ அவசரநிலை",
+    },
+  },
+  {
+    id: "restlessness_or_sudden_behavioral_change",
+    isDangerSign: false,
+    category: "danger",
+    labels: {
+      mr: "अतिअस्वस्थता, चिडचिड किंवा वर्तनात अचानक बदल",
+      hi: "अत्यधिक बेचैनी, चिड़चिड़ापन या व्यवहार में अचानक बदलाव",
+      en: "Extreme restlessness, irritability, or sudden behavioral change",
+      ta: "தீவிர அமைதியின்மை அல்லது திடீர் நடத்தை மாற்றம்",
+    },
+    description: {
+      mr: "ऑक्सिजनची कमतरता किंवा शॉकचे प्रारंभिक लक्षण",
+      hi: "गंभीर बेचैनी या स्वभाव में अचानक परिवर्तन, हाइपोक्सिया या शॉक का प्रारंभिक संकेत",
+      en: "Early sign of cerebral hypoperfusion, severe hypoxia, or systemic shock",
+      ta: "ஆக்ஸிஜன் குறைவு அல்லது தீவிர சோர்வின் தொடக்க அறிகுறி",
+    },
+  },
+  {
+    id: "snake_or_scorpion_bite",
+    isDangerSign: true,
+    category: "danger",
+    labels: {
+      mr: "साप चावणे, विंचू चावणे किंवा विषारी कीटक चावणे",
+      hi: "सांप का काटना, बिच्छू का डंक या जहरीले जीव का काटना",
+      en: "Snake bite, scorpion sting, or venomous animal bite",
+      ta: "பாம்பு கடி, தேள் கொடுக்கு அல்லது விஷக்கடி",
+    },
+    description: {
+      mr: "विषबाधेचा धोका; तात्काळ अँटी स्नेक व्हेनम (ASV) उपलब्ध असलेल्या केंद्रात न्या",
+      hi: "विषैला दंश, तत्काल एंटी-स्नेक वेनम (ASV) युक्त अस्पताल भेजें",
+      en: "Envenomation risk; immediate Anti-Snake Venom (ASV) triage required",
+      ta: "விஷமுறிவு சிகிச்சை உடனடியாக தேவை",
+    },
+  },
 
   // 2. Respiratory
   {
@@ -123,6 +175,24 @@ export const ASHA_SYMPTOMS: SymptomItem[] = [
       hi: "सांस अंदर खींचने पर छाती धंसती है",
       en: "Lower chest wall pulls inward on inhalation",
       ta: "சுவாசத்தின் போது மார்பு உள்நோக்கி இழுக்கப்படுதல்",
+    },
+  },
+  {
+    id: "stridor_in_children",
+    isDangerSign: true,
+    category: "respiratory",
+    maxAgeYears: 5,
+    labels: {
+      mr: "शांत असताना मूल श्वास घेताना शिटीसारखा कर्कश आवाज येणे (स्ट्रायडर)",
+      hi: "बच्चे के सांस अंदर लेते समय सीटी जैसी तेज आवाज आना (स्ट्राइडोर)",
+      en: "Harsh whistling / noisy sound when child breathes in while calm (Stridor)",
+      ta: "குழந்தை அமைதியாக இருக்கும் போது சுவாசிக்கும் விசித்திர சத்தம் (ஸ்ட்ரைடர்)",
+    },
+    description: {
+      mr: "लहान मुलांच्या श्वासनलिकेत अडथळा, तात्काळ संदर्भ आवश्यक",
+      hi: "छोटे बच्चे में श्वसन नली में रुकावट, तत्काल रेफरल आवश्यक",
+      en: "Upper airway obstruction in young child requiring emergency pediatric stabilization",
+      ta: "மூச்சுக்குழாய் அடைப்பு அறிகுறி",
     },
   },
   {
@@ -249,6 +319,23 @@ export const ASHA_SYMPTOMS: SymptomItem[] = [
     },
   },
   {
+    id: "severe_chest_pain_radiating_to_arm_or_jaw",
+    isDangerSign: true,
+    category: "adult_emergency",
+    labels: {
+      mr: "छातीत असह्य जडपणा/वेदना जी डावा हात, मान, पाठ किंवा जबड्याकडे पसरते",
+      hi: "सीने में तेज दबाव/दर्द जो बाएं हाथ, गर्दन, पीठ या जबड़े तक फैले",
+      en: "Severe crushing chest pain spreading to left arm, neck, back, or jaw",
+      ta: "கடுமையான நெஞ்சு வலி இடது கை, கழுத்து, முதுகு அல்லது தாடை வரை பரவுதல்",
+    },
+    description: {
+      mr: "हार्ट अटॅकची तीव्र शक्यता; तात्काळ ईसीजी व १०८ ॲम्ब्युलन्स आवश्यक",
+      hi: "हार्ट अटैक की गंभीर आशंका, तुरंत ईसीजी और आपातकालीन रेफरल",
+      en: "High likelihood of Acute Myocardial Infarction; immediate ECG, aspirin and 108 ambulance",
+      ta: "மாரடைப்பு அபாயம், உடனடி மருத்துவமனை அனுமதி",
+    },
+  },
+  {
     id: "swelling_face_or_hands",
     isDangerSign: false,
     category: "adult_emergency",
@@ -358,6 +445,44 @@ export const ASHA_SYMPTOMS: SymptomItem[] = [
       ta: "கர்ப்பகால உயர் இரத்த அழுத்தம்",
     },
   },
+  {
+    id: "heavy_bleeding_postpartum",
+    isDangerSign: true,
+    category: "maternal",
+    applicableSex: "female",
+    onlyPregnantOrPostpartum: true,
+    labels: {
+      mr: "बाळंतपणानंतर अचानक जास्त रक्तस्त्राव / अनेक कपडे भिजणे (PPH)",
+      hi: "प्रसव के बाद अचानक बहुत अधिक रक्तस्राव / कई कपड़े भीगना (PPH)",
+      en: "Sudden heavy bleeding after delivery / soaking multiple pads (PPH)",
+      ta: "பிரசவத்திற்குப் பின் திடீர் அதிக இரத்தப்போக்கு (PPH)",
+    },
+    description: {
+      mr: "बाळंतपणानंतरचा अतिरक्तस्त्राव; तात्काळ ऑक्सिटोसिन व संदर्भ आवश्यक",
+      hi: "प्रसवोत्तर गंभीर रक्तस्राव, मां के जीवन के लिए तत्काल खतरा",
+      en: "Postpartum hemorrhage (PPH) is an immediate maternal life threat requiring oxytocin & urgent transfer",
+      ta: "பிரசவத்திற்குப் பிந்தைய தீவிர இரத்தப்போக்கு",
+    },
+  },
+  {
+    id: "eclampsia_seizures",
+    isDangerSign: true,
+    category: "maternal",
+    applicableSex: "female",
+    onlyPregnantOrPostpartum: true,
+    labels: {
+      mr: "गरोदरपणात किंवा बाळंतपणानंतर झटके / फेफरे येणे (एक्लेम्पसिया)",
+      hi: "गर्भावस्था में या प्रसव के बाद दौरे / झटके आना (एक्लेम्पसिया)",
+      en: "Fits, seizures or convulsions during pregnancy or after delivery (Eclampsia)",
+      ta: "கர்ப்ப காலத்தில் அல்லது பிரசவத்திற்குப் பின் வலிப்பு / இழுப்பு (எக்ளாம்சியா)",
+    },
+    description: {
+      mr: "गरोदरपणातील अतिरक्तदाब व झटके, तात्काळ उच्च केंद्रात हलवा",
+      hi: "गर्भावस्था में जानलेवा उच्च रक्तचाप और दौरे, तुरंत रेफरल आवश्यक",
+      en: "Life-threatening hypertensive obstetric emergency requiring urgent magnesium sulfate & delivery",
+      ta: "உயிருக்கு ஆபத்தான கர்ப்பகால அவசரநிலை",
+    },
+  },
 
   // 6. Digestive & Dehydration
   {
@@ -445,6 +570,42 @@ export const ASHA_SYMPTOMS: SymptomItem[] = [
       hi: "कान के भीतर दर्द",
       en: "Otalgia / Ear ache",
       ta: "காதில் தொடர் வலி",
+    },
+  },
+
+  // 8. Trauma & Acute Injury
+  {
+    id: "fracture_with_exposed_bone",
+    isDangerSign: true,
+    category: "trauma",
+    labels: {
+      mr: "हाड मोडलेले असून त्वचेबाहेर दिसणे किंवा मोठी जखम असणे (ओपन फ्रॅक्चर)",
+      hi: "टूटी हुई हड्डी का त्वचा से बाहर निकलना / खुला घाव (कंपाउंड फ्रैक्चर)",
+      en: "Broken bone piercing through skin / visible open wound (Compound fracture)",
+      ta: "எலும்பு முறிவு தோலை கிழித்து வெளியே தெரிதல் (திறந்த எலும்பு முறிவு)",
+    },
+    description: {
+      mr: "ओपन फ्रॅक्चर व रक्तस्त्राव; स्थिर करा व तात्काळ संदर्भ द्या",
+      hi: "खुला फ्रैक्चर और गंभीर संक्रमण का खतरा, तुरंत सर्जरी सेंटर रेफर करें",
+      en: "Open fracture with major hemorrhage and osteomyelitis risk; immobilize and transfer urgently",
+      ta: "அவசர அறுவை சிகிச்சை தேவைப்படும் திறந்த எலும்பு முறிவு",
+    },
+  },
+  {
+    id: "burn_special_area_hands_face_perineum_or_airway",
+    isDangerSign: true,
+    category: "trauma",
+    labels: {
+      mr: "चेहरा, डोळे, हात, पाय, जननेंद्रिये किंवा श्वसनमार्ग भाजणे",
+      hi: "चेहरे, आंख, हाथ, पैर, गुप्तांग या सांस की नली का जलना",
+      en: "Burns on face, eyes, hands, feet, groin/genitals, or breathing airway",
+      ta: "முகம், கண்கள், கைகள், கால்கள், பிறப்புறுப்பு அல்லது சுவாசப்பாதையில் தீக்காயம்",
+    },
+    description: {
+      mr: "संवेदनशील भागावरील भाजणे, तात्काळ बर्न युनिटकडे संदर्भ आवश्यक",
+      hi: "अति-संवेदनशील अंगों का जलना, तुरंत बर्न यूनिट में रेफर करें",
+      en: "Critical site burn risking airway compromise, permanent contractures or severe sepsis",
+      ta: "முக்கிய உறுப்புகளில் தீவிர தீக்காயம்",
     },
   },
 ];
