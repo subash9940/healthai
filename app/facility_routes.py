@@ -667,9 +667,11 @@ async def accept_unassigned_referral(
     pool: asyncpg.Pool = Depends(get_pool),
 ):
     """
-    Action: Accept Unassigned Referral (created -> in_transit, facility_id assigned).
+    Action: Accept Referral (created -> in_transit, facility_id assigned/confirmed).
     - Auth: current_staff via get_current_facility_staff
-    - Only legal from state 'created' with facility_id IS NULL (returns 409 Conflict if already assigned or not in created state)
+    - Legal from state 'created' when facility_id IS NULL OR facility_id = current_staff.facility_id
+    - Single conditional UPDATE (no read-then-write on happy path)
+    - Wrong facility -> 403 Forbidden; wrong state -> 409 Conflict
     - Atomically assigns referrals.facility_id = current_staff.facility_id and state = 'in_transit'
     - Audits transition in referral_state_transitions
     """
@@ -687,41 +689,18 @@ async def accept_unassigned_referral(
 
     async with pool.acquire() as conn:
         async with conn.transaction():
-            referral = await conn.fetchrow(
-                "SELECT id, facility_id, state FROM referrals WHERE id = $1 FOR UPDATE",
-                ref_uuid,
-            )
-
-            if not referral:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Referral with ID {referral_id} not found.",
-                )
-
-            current_facility_id = referral["facility_id"]
-            current_state_str = str(referral["state"])
-
-            if current_facility_id is not None and current_facility_id != facility_uuid:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=f"Referral is already assigned to another facility (facility_id: {current_facility_id}).",
-                )
-
-            if current_state_str != ReferralState.CREATED.value:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=f"Cannot accept referral: current state is '{current_state_str}', expected '{ReferralState.CREATED.value}'.",
-                )
-
             now_ts = datetime.now(timezone.utc)
             target_state_enum = ReferralState.IN_TRANSIT
 
-            # Assign facility_id and update state to in_transit
-            await conn.execute(
+            # Single conditional UPDATE (no read-then-write on happy path)
+            updated_row = await conn.fetchrow(
                 """
                 UPDATE referrals
                 SET facility_id = $1, state = $2, updated_at = $3
                 WHERE id = $4
+                  AND state = 'created'
+                  AND (facility_id IS NULL OR facility_id = $1)
+                RETURNING id, facility_id, state
                 """,
                 facility_uuid,
                 target_state_enum.value,
@@ -729,25 +708,58 @@ async def accept_unassigned_referral(
                 ref_uuid,
             )
 
-            # Insert audit transition log
-            await conn.execute(
-                """
-                INSERT INTO referral_state_transitions (
-                    referral_id, from_state, to_state, updated_by_staff_id, changed_at, notes
+            if updated_row:
+                # Insert audit transition log
+                await conn.execute(
+                    """
+                    INSERT INTO referral_state_transitions (
+                        referral_id, from_state, to_state, updated_by_staff_id, changed_at, notes
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    """,
+                    ref_uuid,
+                    ReferralState.CREATED.value,
+                    target_state_enum.value,
+                    staff_uuid,
+                    now_ts,
+                    notes,
                 )
-                VALUES ($1, $2, $3, $4, $5, $6)
-                """,
-                ref_uuid,
-                current_state_str,
-                target_state_enum.value,
-                staff_uuid,
-                now_ts,
-                notes,
-            )
+            else:
+                # Error inspection branch
+                referral = await conn.fetchrow(
+                    "SELECT id, facility_id, state FROM referrals WHERE id = $1",
+                    ref_uuid,
+                )
+
+                if not referral:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Referral with ID {referral_id} not found.",
+                    )
+
+                current_facility_id = referral["facility_id"]
+                current_state_str = str(referral["state"])
+
+                if current_facility_id is not None and current_facility_id != facility_uuid:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Cross-facility isolation: Referral is assigned to another facility (facility_id: {current_facility_id}).",
+                    )
+
+                if current_state_str != ReferralState.CREATED.value:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"Cannot accept referral: current state is '{current_state_str}', expected '{ReferralState.CREATED.value}'.",
+                    )
+
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Cannot accept referral: conditional update failed.",
+                )
 
     return ReferralTransitionResponse(
         referral_id=referral_id,
-        previous_state=current_state_str,
+        previous_state=ReferralState.CREATED.value,
         new_state=ReferralState.IN_TRANSIT.value,
         updated_by_staff_id=current_staff.staff_id,
         updated_at=now_ts.isoformat(),

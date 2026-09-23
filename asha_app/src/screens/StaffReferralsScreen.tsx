@@ -272,10 +272,10 @@ export const StaffReferralsScreen: React.FC<StaffReferralsScreenProps> = ({
   };
 
   const isUnassigned = (ref: FacilityReferral) =>
-    !ref.facility_id || (ref.state === "created" && !ref.facility_id);
+    ref.state === "created" || !ref.facility_id;
 
   const isInTransit = (ref: FacilityReferral) =>
-    ref.state === "in_transit" || (ref.state === "created" && !!ref.facility_id);
+    ref.state === "in_transit";
 
   const isReceived = (ref: FacilityReferral) =>
     ref.state === "received_at_facility";
@@ -327,7 +327,7 @@ export const StaffReferralsScreen: React.FC<StaffReferralsScreenProps> = ({
   };
 
   const getStatusLabel = (item: FacilityReferral) => {
-    if (isUnassigned(item)) {
+    if (!item.facility_id) {
       return t.staff_ref_unassigned_badge || "UNASSIGNED";
     }
     if (item.state === "in_transit") {
