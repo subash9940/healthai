@@ -48,9 +48,6 @@ export default function NotFound() {
           <Link href="/" className="btn-primary" style={{ padding: '10px 24px' }}>
             ← Return to Home Triage
           </Link>
-          <Link href="/facility" className="btn-secondary" style={{ padding: '10px 20px' }}>
-            Facility Queue
-          </Link>
         </div>
 
         <div style={{ marginTop: '32px', borderTop: '1px solid var(--border-light)', paddingTop: '20px', fontSize: '13px', color: 'var(--text-muted)' }}>
