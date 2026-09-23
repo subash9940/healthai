@@ -57,6 +57,12 @@ export const SymptomCheckScreen: React.FC<SymptomCheckScreenProps> = ({
     ) {
       return false;
     }
+    if (
+      sym.maxAgeYears !== undefined &&
+      demographics.patient_age_years >= sym.maxAgeYears
+    ) {
+      return false;
+    }
     return true;
   });
 
@@ -127,8 +133,6 @@ export const SymptomCheckScreen: React.FC<SymptomCheckScreenProps> = ({
               style={[
                 styles.card,
                 isSelected && styles.cardSelected,
-                item.isDangerSign && styles.dangerCard,
-                isSelected && item.isDangerSign && styles.dangerCardSelected,
               ]}
               onPress={() => toggleSymptom(item.id)}
               activeOpacity={0.7}
@@ -147,14 +151,6 @@ export const SymptomCheckScreen: React.FC<SymptomCheckScreenProps> = ({
                     {item.labels[language] || item.labels.en || item.labels.mr}
                   </Text>
                 </View>
-
-                {item.isDangerSign && (
-                  <View style={styles.dangerBadge}>
-                    <Text style={styles.dangerBadgeText}>
-                      {t.symptom_danger_badge}
-                    </Text>
-                  </View>
-                )}
               </View>
 
               <Text style={styles.symptomDesc}>
@@ -276,13 +272,6 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.primaryLight,
     borderColor: THEME.colors.primary,
   },
-  dangerCard: {
-    borderColor: "#FECACA",
-  },
-  dangerCardSelected: {
-    backgroundColor: THEME.colors.emergencyBg,
-    borderColor: THEME.colors.emergencyBorder,
-  },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -323,17 +312,6 @@ const styles = StyleSheet.create({
   },
   symptomLabelSelected: {
     color: THEME.colors.primaryDark,
-  },
-  dangerBadge: {
-    backgroundColor: THEME.colors.emergencyBorder,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  dangerBadgeText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#FFFFFF",
   },
   symptomDesc: {
     fontSize: 12,

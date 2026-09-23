@@ -229,8 +229,15 @@ export const TriageResultScreen: React.FC<TriageResultScreenProps> = ({
           { backgroundColor: cardStyle.bg, borderColor: cardStyle.border },
         ]}
       >
-        <View style={styles.offlineBadge}>
-          <Text style={styles.offlineBadgeText}>{t.result_offline_badge}</Text>
+        <View style={styles.badgeRow}>
+          <View style={styles.offlineBadge}>
+            <Text style={styles.offlineBadgeText}>{t.result_offline_badge}</Text>
+          </View>
+          {triageResult.urgency === "emergency" && (
+            <View style={styles.dangerBadge}>
+              <Text style={styles.dangerBadgeText}>⚠️ {t.symptom_danger_badge || "Danger Sign"}</Text>
+            </View>
+          )}
         </View>
         <Text style={[styles.urgencyTitle, { color: cardStyle.text }]}>
           {urgencyLabel}
@@ -411,12 +418,17 @@ const styles = StyleSheet.create({
     marginBottom: THEME.spacing.md,
     alignItems: "center",
   },
+  badgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
   offlineBadge: {
     backgroundColor: THEME.colors.surface,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
-    marginBottom: 8,
     borderWidth: 1,
     borderColor: THEME.colors.border,
   },
@@ -424,6 +436,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
     color: THEME.colors.textPrimary,
+  },
+  dangerBadge: {
+    backgroundColor: THEME.colors.emergencyBorder,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  dangerBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
   urgencyTitle: {
     fontSize: 22,
