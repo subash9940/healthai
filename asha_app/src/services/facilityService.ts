@@ -24,9 +24,15 @@ const ENDPOINTS =
         "http://10.0.2.2:8001/facility/availability",
       ];
 
+const NEARBY_ENDPOINTS = [
+  "http://10.0.2.2:8001/facility/nearby",
+  "http://127.0.0.1:8001/facility/nearby",
+  "http://localhost:8001/facility/nearby",
+];
+
 export const FALLBACK_FACILITIES: FacilityAvailabilityItem[] = [
   {
-    id: "e0a1b2c3-d4e5-4f6a-b7c8-d9e0f1a2b3c4",
+    id: "1847ee81-9e03-468e-9af3-a9650d12dbeb",
     name: "PHC Shirur (प्राथमिक आरोग्य केंद्र शिरूर)",
     level: "phc",
     operational_status: "AVAILABLE",
@@ -36,7 +42,7 @@ export const FALLBACK_FACILITIES: FacilityAvailabilityItem[] = [
     updated_at: new Date().toISOString(),
   },
   {
-    id: "f1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    id: "3141e5f7-5633-47b0-a66e-364d65049c8a",
     name: "CHC Haveli (सामुदायिक आरोग्य केंद्र हवेली)",
     level: "chc",
     operational_status: "AVAILABLE",
@@ -75,6 +81,60 @@ export interface FacilityFetchResult {
 }
 
 export const FacilityService = {
+  async getNearbyFacilities(
+    level?: string,
+    district?: string,
+    lat?: number,
+    lng?: number
+  ): Promise<FacilityFetchResult> {
+    const queryParams = new URLSearchParams();
+    if (level) queryParams.append("level", level);
+    if (district) queryParams.append("district", district);
+    if (lat !== undefined) queryParams.append("lat", lat.toString());
+    if (lng !== undefined) queryParams.append("lng", lng.toString());
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : "";
+
+    for (const baseUrl of NEARBY_ENDPOINTS) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 2000);
+
+        const res = await fetch(`${baseUrl}${queryString}`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+
+        if (res.ok) {
+          const data: FacilityAvailabilityItem[] = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            return {
+              facilities: data,
+              isOfflineCached: false,
+              cachedAt: new Date().toISOString(),
+            };
+          }
+        }
+      } catch {
+        // Try next endpoint
+      }
+    }
+
+    // If nearby endpoint fails, fall back to general availability
+    const generalResult = await this.getFacilityAvailability();
+    if (level && generalResult.facilities) {
+      const filtered = generalResult.facilities.filter(
+        (f) => f.level.toLowerCase() === level.toLowerCase()
+      );
+      return {
+        ...generalResult,
+        facilities: filtered.length > 0 ? filtered : generalResult.facilities,
+      };
+    }
+    return generalResult;
+  },
+
   async getFacilityAvailability(): Promise<FacilityFetchResult> {
     for (const url of ENDPOINTS) {
       try {

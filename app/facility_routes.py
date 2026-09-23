@@ -1,9 +1,11 @@
 import uuid
 import json
 import time
+import math
 from typing import List, Optional, Dict, Tuple
 from datetime import datetime, timezone
 import asyncpg
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.db import get_pool
@@ -20,6 +22,7 @@ from app.schemas.facility import (
     FacilityStatusResponse,
     UpdateFacilityStatusRequest,
     FacilityAvailabilityItem,
+    FacilityNearbyItem,
 )
 from app.services.auth import (
     get_current_facility_staff,
@@ -104,6 +107,80 @@ async def list_public_facilities(
         )
         for row in rows
     ]
+
+
+def _calculate_haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate the great-circle distance between two geographic coordinates in kilometers."""
+    R = 6371.0  # Earth radius in km
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    )
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return round(R * c, 2)
+
+
+@router.get("/nearby", response_model=List[FacilityNearbyItem])
+async def get_nearby_facilities(
+    district: Optional[str] = None,
+    level: Optional[str] = None,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+    urgency: Optional[str] = None,
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Read-only endpoint returning nearby healthcare facilities for a given patient/ASHA location.
+    Supports filtering by level (e.g. phc, chc, dh) and district, with proximity sorting.
+    """
+    async with pool.acquire() as conn:
+        query = """
+            SELECT id, name, level, lat, lng, contact_phone, operational_status, available_beds, status_note, updated_at
+            FROM facilities
+        """
+        conditions = []
+        params = []
+        if level:
+            params.append(level.lower())
+            conditions.append(f"LOWER(level::text) = ${len(params)}")
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        query += " ORDER BY name ASC"
+        rows = await conn.fetch(query, *params)
+
+    items: List[FacilityNearbyItem] = []
+    for row in rows:
+        fac_lat = row["lat"]
+        fac_lng = row["lng"]
+        dist = None
+        if lat is not None and lng is not None and fac_lat is not None and fac_lng is not None:
+            dist = _calculate_haversine_km(lat, lng, fac_lat, fac_lng)
+
+        items.append(
+            FacilityNearbyItem(
+                id=str(row["id"]),
+                name=str(row["name"]),
+                level=str(row["level"]),
+                operational_status=str(row["operational_status"] or "AVAILABLE"),
+                available_beds=int(row["available_beds"] if row["available_beds"] is not None else 10),
+                status_note=row["status_note"],
+                contact_phone=row["contact_phone"],
+                district=district or "Pune",
+                lat=fac_lat,
+                lng=fac_lng,
+                distance_km=dist,
+                updated_at=row["updated_at"].isoformat() if row["updated_at"] else None,
+            )
+        )
+
+    if lat is not None and lng is not None:
+        items.sort(key=lambda x: (x.distance_km is None, x.distance_km or 0))
+
+    return items
 
 
 @router.get("/availability", response_model=List[FacilityAvailabilityItem])
@@ -624,10 +701,10 @@ async def accept_unassigned_referral(
             current_facility_id = referral["facility_id"]
             current_state_str = str(referral["state"])
 
-            if current_facility_id is not None:
+            if current_facility_id is not None and current_facility_id != facility_uuid:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail=f"Referral is already assigned to a facility (facility_id: {current_facility_id}).",
+                    detail=f"Referral is already assigned to another facility (facility_id: {current_facility_id}).",
                 )
 
             if current_state_str != ReferralState.CREATED.value:
@@ -1002,4 +1079,94 @@ async def update_facility_status(
             updated_by_staff_id=current_staff.staff_id,
             updated_by_staff_name=current_staff.name,
         )
+
+
+class SOSAlertItem(BaseModel):
+    id: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    patient_context: dict = {}
+    status: str
+    created_at: str
+
+
+class SOSAlertListResponse(BaseModel):
+    facility_id: str
+    alerts: list[SOSAlertItem]
+    count: int
+
+
+@router.get("/sos-alerts", response_model=SOSAlertListResponse)
+async def get_facility_sos_alerts(
+    status: Optional[str] = "active",
+    current_staff: StaffSession = Depends(get_current_facility_staff),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Retrieve live emergency SOS alerts for facility dashboards.
+    Surfaces unhandled SOS events at top-of-list for immediate response.
+    """
+    async with pool.acquire() as conn:
+        query = "SELECT id, latitude, longitude, patient_context, status, created_at FROM sos_alerts"
+        params = []
+        if status and status != "ALL":
+            query += " WHERE status = $1"
+            params.append(status)
+        query += " ORDER BY created_at DESC LIMIT 50"
+
+        rows = await conn.fetch(query, *params)
+
+        alerts = [
+            SOSAlertItem(
+                id=str(r["id"]),
+                latitude=r["latitude"],
+                longitude=r["longitude"],
+                patient_context=json.loads(r["patient_context"]) if isinstance(r["patient_context"], str) else (r["patient_context"] or {}),
+                status=r["status"],
+                created_at=r["created_at"].isoformat() if r["created_at"] else "",
+            )
+            for r in rows
+        ]
+
+        return SOSAlertListResponse(
+            facility_id=current_staff.facility_id,
+            alerts=alerts,
+            count=len(alerts),
+        )
+
+
+@router.post("/sos-alerts/{alert_id}/acknowledge")
+async def acknowledge_sos_alert(
+    alert_id: str,
+    current_staff: StaffSession = Depends(get_current_facility_staff),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """
+    Acknowledge/Resolve an SOS alert by facility staff.
+    """
+    try:
+        alert_uuid = uuid.UUID(alert_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid SOS alert ID format.",
+        )
+
+    async with pool.acquire() as conn:
+        res = await conn.execute(
+            """
+            UPDATE sos_alerts
+            SET status = 'acknowledged'
+            WHERE id = $1
+            """,
+            alert_uuid,
+        )
+        if res == "UPDATE 0":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="SOS alert not found.",
+            )
+
+        return {"status": "ok", "message": f"SOS alert {alert_id} acknowledged by {current_staff.name}."}
+
 

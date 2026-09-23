@@ -6,13 +6,15 @@
  * and high-priority "Mark In-Transit" ambulance trigger.
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   Alert,
+  TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import { THEME } from "../constants/theme";
 import { TRANSLATIONS } from "../constants/translations";
@@ -23,9 +25,11 @@ import {
   Vitals,
   ReferralRecord,
   PatientRecord,
+  FacilityAvailabilityItem,
 } from "../types";
 import { TouchButton } from "../components/TouchButton";
 import { StorageService } from "../services/storageService";
+import { FacilityService } from "../services/facilityService";
 
 interface TriageResultScreenProps {
   language: Language;
@@ -51,6 +55,40 @@ export const TriageResultScreen: React.FC<TriageResultScreenProps> = ({
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
   const [isInTransit, setIsInTransit] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [facilities, setFacilities] = useState<FacilityAvailabilityItem[]>([]);
+  const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
+  const [isLoadingFacilities, setIsLoadingFacilities] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (triageResult.requires_referral) {
+      setIsLoadingFacilities(true);
+      FacilityService.getNearbyFacilities(
+        triageResult.referral_target_level || undefined,
+        demographics.patient_village || undefined
+      )
+        .then((result) => {
+          if (isMounted) {
+            setFacilities(result.facilities);
+            if (result.facilities.length > 0) {
+              // Pre-select the nearest / highest recommended facility by default
+              setSelectedFacilityId(result.facilities[0].id);
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn("Failed to load nearby facilities for referral:", err);
+        })
+        .finally(() => {
+          if (isMounted) {
+            setIsLoadingFacilities(false);
+          }
+        });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [triageResult.requires_referral, triageResult.referral_target_level, demographics.patient_village]);
 
   const urgencyKey = `result_urgency_${triageResult.urgency}` as keyof typeof t;
   const urgencyLabel = t[urgencyKey] || triageResult.urgency.toUpperCase();
@@ -100,8 +138,9 @@ export const TriageResultScreen: React.FC<TriageResultScreenProps> = ({
     };
     await StorageService.savePatientRecord(record);
 
-    // If requires referral, create referral record
+    // If requires referral, create referral record with single assigned facility
     if (triageResult.requires_referral) {
+      const selectedFac = facilities.find((f) => f.id === selectedFacilityId);
       const referral: ReferralRecord = {
         referral_id: "ref_" + Date.now().toString(36),
         patient_id: demographics.patient_id,
@@ -111,13 +150,15 @@ export const TriageResultScreen: React.FC<TriageResultScreenProps> = ({
         patient_age: demographics.patient_age_years,
         patient_sex: demographics.patient_sex,
         urgency: triageResult.urgency,
-        target_facility: triageResult.referral_target_level || "phc",
+        target_facility: (selectedFac?.level as any) || triageResult.referral_target_level || "phc",
+        facility_id: selectedFac?.id || null,
+        facility_name: selectedFac?.name || null,
         status: transitMarked ? "in_transit" : "created",
         status_history: [
           {
             status: "created",
             timestamp: new Date().toISOString(),
-            note: "Referral generated via ASHA Field App",
+            note: `Referral generated via ASHA Field App${selectedFac?.name ? ` -> ${selectedFac.name}` : ""}`,
           },
           ...(transitMarked
             ? [
@@ -219,6 +260,102 @@ export const TriageResultScreen: React.FC<TriageResultScreenProps> = ({
           ))}
         </View>
       </View>
+
+      {/* Target Facility Selection (Only when referral is required) */}
+      {triageResult.requires_referral && (
+        <View style={styles.facilitySection}>
+          <Text style={styles.facilitySectionTitle}>{t.select_facility_title}</Text>
+          <Text style={styles.facilitySectionSubtitle}>{t.select_facility_subtitle}</Text>
+
+          {isLoadingFacilities ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={THEME.colors.primary} />
+            </View>
+          ) : facilities.length === 0 ? (
+            <Text style={styles.noFacilitiesText}>{t.facility_no_facilities_found}</Text>
+          ) : (
+            <View style={styles.facilityList}>
+              {facilities.map((fac, idx) => {
+                const isSelected = selectedFacilityId === fac.id;
+                const isRecommended = idx === 0;
+                const statusColor =
+                  fac.operational_status === "AVAILABLE"
+                    ? "#059669"
+                    : fac.operational_status === "BUSY"
+                    ? "#D97706"
+                    : "#DC2626";
+
+                return (
+                  <TouchableOpacity
+                    key={fac.id}
+                    activeOpacity={0.7}
+                    onPress={() => setSelectedFacilityId(fac.id)}
+                    style={[
+                      styles.facilityCard,
+                      isSelected && styles.facilityCardSelected,
+                    ]}
+                  >
+                    <View style={styles.facilityHeaderRow}>
+                      <Text style={styles.facilityName}>{fac.name}</Text>
+                      <View style={styles.badgeRow}>
+                        {isRecommended && (
+                          <View style={styles.recommendedBadge}>
+                            <Text style={styles.recommendedBadgeText}>
+                              {t.facility_auto_recommended}
+                            </Text>
+                          </View>
+                        )}
+                        {isSelected && (
+                          <View style={styles.selectedBadge}>
+                            <Text style={styles.selectedBadgeText}>
+                              ✓ {t.facility_selected_badge}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+
+                    <View style={styles.facilityMetricsRow}>
+                      <View
+                        style={[
+                          styles.statusPill,
+                          { backgroundColor: statusColor + "18", borderColor: statusColor },
+                        ]}
+                      >
+                        <Text style={[styles.statusPillText, { color: statusColor }]}>
+                          {fac.operational_status}
+                        </Text>
+                      </View>
+
+                      <Text style={styles.facilityMetricText}>
+                        🛏️ {t.facility_beds_available.replace("{count}", String(fac.available_beds))}
+                      </Text>
+
+                      {fac.distance_km !== undefined && fac.distance_km !== null && (
+                        <Text style={styles.facilityMetricText}>
+                          📍 {t.facility_distance_label.replace("{dist}", String(fac.distance_km))}
+                        </Text>
+                      )}
+                    </View>
+
+                    {fac.status_note ? (
+                      <Text style={styles.facilityNoteText} numberOfLines={2}>
+                        {fac.status_note}
+                      </Text>
+                    ) : null}
+
+                    {fac.contact_phone ? (
+                      <Text style={styles.facilityPhoneText}>
+                        📞 {t.facility_contact_phone.replace("{phone}", fac.contact_phone)}
+                      </Text>
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Referral Action Buttons */}
       {triageResult.requires_referral && !isInTransit && (
@@ -350,6 +487,123 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontFamily: "monospace",
     color: THEME.colors.textPrimary,
+  },
+  facilitySection: {
+    backgroundColor: THEME.colors.surface,
+    padding: THEME.spacing.md,
+    borderRadius: THEME.borderRadius.md,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    marginBottom: THEME.spacing.md,
+  },
+  facilitySectionTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: THEME.colors.primaryDark,
+    marginBottom: 2,
+  },
+  facilitySectionSubtitle: {
+    fontSize: 12,
+    color: THEME.colors.textMuted,
+    marginBottom: 12,
+  },
+  loadingContainer: {
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  noFacilitiesText: {
+    fontSize: 13,
+    color: THEME.colors.textMuted,
+    fontStyle: "italic",
+    paddingVertical: 8,
+  },
+  facilityList: {
+    gap: 8,
+  },
+  facilityCard: {
+    backgroundColor: THEME.colors.surfaceSubtle,
+    borderWidth: 1.5,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.borderRadius.md,
+    padding: 12,
+    minHeight: 48,
+  },
+  facilityCardSelected: {
+    borderColor: THEME.colors.primary,
+    backgroundColor: "#F0FDF4",
+  },
+  facilityHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 6,
+  },
+  facilityName: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: THEME.colors.textPrimary,
+    flex: 1,
+    marginRight: 6,
+  },
+  badgeRow: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  recommendedBadge: {
+    backgroundColor: "#E0E7FF",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  recommendedBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#4338CA",
+  },
+  selectedBadge: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  selectedBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#15803D",
+  },
+  facilityMetricsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 4,
+  },
+  statusPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  facilityMetricText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: THEME.colors.textSecondary,
+  },
+  facilityNoteText: {
+    fontSize: 11,
+    color: THEME.colors.textMuted,
+    marginTop: 2,
+  },
+  facilityPhoneText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: THEME.colors.textSecondary,
+    marginTop: 2,
   },
   transitCta: {
     marginBottom: THEME.spacing.sm,

@@ -268,6 +268,79 @@ async def save_triage(
     }
 
 
+
+def _normalize_facility_level(level: Optional[str]) -> Optional[str]:
+    """Map mobile facility level string to PostgreSQL facility_level enum."""
+    if not level:
+        return None
+    val = str(level).lower().strip()
+    if val in ("phc", "chc", "district_hospital"):
+        return val
+    if val in ("sdh", "dh", "hospital"):
+        return "district_hospital"
+    if val in ("sub_centre", "sub_center", "hsc"):
+        return "phc"
+    return None
+
+
+def _normalize_referral_state(state: Optional[str]) -> str:
+    """Map mobile referral status string to PostgreSQL referral_state enum."""
+    if not state:
+        return "created"
+    val = str(state).lower().strip()
+    if val in ("created", "in_transit", "received_at_facility", "closed", "cancelled"):
+        return val
+    return "created"
+
+
+# Facility level hierarchy for fallback: prefer same level, then escalate upward
+_LEVEL_HIERARCHY = ["phc", "chc", "district_hospital"]
+
+
+async def _resolve_facility_for_level(
+    conn: asyncpg.Connection, target_level: Optional[str]
+) -> Optional[uuid.UUID]:
+    """
+    Find the best facility_id for the given referral target level.
+    Tries exact match first, then escalates up the facility hierarchy,
+    and finally falls back to any available facility.
+    """
+    normalized = _normalize_facility_level(target_level)
+
+    # 1. Try exact level match
+    if normalized:
+        row = await conn.fetchrow(
+            "SELECT id FROM facilities WHERE level = $1 LIMIT 1", normalized
+        )
+        if row:
+            return row["id"]
+
+    # 2. Try higher-level facilities in hierarchy order
+    if normalized and normalized in _LEVEL_HIERARCHY:
+        start_idx = _LEVEL_HIERARCHY.index(normalized) + 1
+        for lvl in _LEVEL_HIERARCHY[start_idx:]:
+            row = await conn.fetchrow(
+                "SELECT id FROM facilities WHERE level = $1 LIMIT 1", lvl
+            )
+            if row:
+                return row["id"]
+
+    # 3. Fall back to any facility (highest level first)
+    row = await conn.fetchrow(
+        """
+        SELECT id FROM facilities
+        ORDER BY CASE level
+            WHEN 'district_hospital' THEN 3
+            WHEN 'chc' THEN 2
+            WHEN 'phc' THEN 1
+            ELSE 0
+        END DESC
+        LIMIT 1
+        """
+    )
+    return row["id"] if row else None
+
+
 async def _create_referral(
     conn: asyncpg.Connection,
     triage_record_id: uuid.UUID,
@@ -279,18 +352,20 @@ async def _create_referral(
     (from_state = NULL -> to_state = 'created'), so the audit trail
     starts at referral creation, not at the first state change.
 
-    facility_id is left NULL here — nearest/appropriate facility lookup
-    by target_level + patient location is referral-routing logic that
-    belongs with the state machine spec, not this insert path. Wiring
-    that in is a follow-up once the routing rule is decided.
+    Auto-assigns facility_id by matching target_level to facilities in DB.
+    Falls back to the highest-level available facility if no exact match.
     """
+    # Auto-assign facility based on target_level
+    facility_id = await _resolve_facility_for_level(conn, target_level)
+
     referral_row = await conn.fetchrow(
         """
         INSERT INTO referrals (triage_record_id, facility_id, created_by, state)
-        VALUES ($1, NULL, $2, 'created')
+        VALUES ($1, $2, $3, 'created')
         RETURNING id
         """,
         triage_record_id,
+        facility_id,
         created_by,
     )
     referral_id = referral_row["id"]
@@ -539,18 +614,32 @@ async def sync_single_referral_record(
                     logger.warning(f"asha_worker_id '{worker_uuid}' not found in asha_workers table — storing NULL")
                     worker_uuid = None
 
-            # D5: facility_id = NULL, state = 'created', created_by_role = 'asha'
+            # Resolve facility_id: accept explicit facility_id if provided and valid,
+            # else auto-resolve via _resolve_facility_for_level by target_facility level
+            facility_uuid = None
+            if getattr(rec, "facility_id", None):
+                try:
+                    facility_uuid = uuid.UUID(str(rec.facility_id))
+                except (ValueError, TypeError):
+                    facility_uuid = None
+
+            if facility_uuid is None:
+                target_level = getattr(rec, "target_facility", None)
+                facility_uuid = await _resolve_facility_for_level(conn, target_level)
+
+            # Insert referral record
             ref_row = await conn.fetchrow(
                 """
                 INSERT INTO referrals (
                     triage_record_id, facility_id, created_by, created_by_role,
                     state, client_ref_id
                 )
-                VALUES ($1, NULL, $2, 'asha', 'created', $3)
+                VALUES ($1, $2, $3, 'asha', 'created', $4)
                 ON CONFLICT (client_ref_id) WHERE client_ref_id IS NOT NULL DO NOTHING
                 RETURNING id
                 """,
                 triage_record_id,
+                facility_uuid,
                 worker_uuid,
                 client_ref_id,
             )

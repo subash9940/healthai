@@ -57,6 +57,8 @@ class ClientReferralRecord(BaseModel):
     patient_sex: Optional[Sex] = None
     urgency: Optional[Urgency] = None
     target_facility: Optional[str] = None
+    facility_id: Optional[str] = None
+    facility_name: Optional[str] = None
     status: Optional[str] = "created"
     status_history: Optional[List[ClientReferralStatusHistory]] = Field(default_factory=list)
     symptoms: Optional[List[str]] = Field(default_factory=list)
