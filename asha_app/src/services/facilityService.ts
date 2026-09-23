@@ -6,15 +6,23 @@
  * Automatically caches for zero-network field scenarios with pull-to-refresh.
  */
 
+import { Platform } from "react-native";
 import { FacilityAvailabilityItem } from "../types";
 import { StorageService } from "./storageService";
 
-// Standard Android emulator loopback & localhost endpoints
-const ENDPOINTS = [
-  "http://10.0.2.2:8001/facility/availability",
-  "http://127.0.0.1:8001/facility/availability",
-  "http://localhost:8001/facility/availability",
-];
+// Standard Android emulator loopback & localhost endpoints (platform-appropriate ordered first)
+const ENDPOINTS =
+  Platform.OS === "android"
+    ? [
+        "http://10.0.2.2:8001/facility/availability",
+        "http://127.0.0.1:8001/facility/availability",
+        "http://localhost:8001/facility/availability",
+      ]
+    : [
+        "http://localhost:8001/facility/availability",
+        "http://127.0.0.1:8001/facility/availability",
+        "http://10.0.2.2:8001/facility/availability",
+      ];
 
 export const FALLBACK_FACILITIES: FacilityAvailabilityItem[] = [
   {
